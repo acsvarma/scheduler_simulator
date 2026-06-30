@@ -1,60 +1,146 @@
 {
   "version": 1,
   "sequences": {
-    "Default CAR-T": [
+    "NEXT": [
       {
         "step": 0,
         "phase": "UP_TSA",
         "phase_label": "UP_TSA",
         "phase_key": "UP_TSA",
         "equipment_type": "Romag",
-        "duration_min": 240,
+        "duration_min": 125,
         "segments": [
           {
-            "name": "Seg 1 \u2013 Cell Labelling",
-            "duration_min": 50,
+            "name": "Cell Loading",
+            "duration_min": 12,
+            "max_duration_min": 25,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [
               "Romag Robot"
             ],
-            "robot_duration_min": 5,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 12
           },
           {
-            "name": "Seg 2 \u2013 Incubation",
-            "duration_min": 40,
+            "name": "Wash 1",
+            "duration_min": 20,
+            "max_duration_min": 25,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 0
           },
           {
-            "name": "Seg 3 \u2013 Wash",
-            "duration_min": 50,
+            "name": "Wash 2",
+            "duration_min": 18,
+            "max_duration_min": 25,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [],
+            "robot_duration_min": 0
+          },
+          {
+            "name": "Wash 3",
+            "duration_min": 16,
+            "max_duration_min": 25,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [],
+            "robot_duration_min": 0
+          },
+          {
+            "name": "Wash 4",
+            "duration_min": 16,
+            "max_duration_min": 25,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [],
+            "robot_duration_min": 0
+          },
+          {
+            "name": "Wash 5",
+            "duration_min": 16,
+            "max_duration_min": 25,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [],
+            "robot_duration_min": 0
+          },
+          {
+            "name": "Sample",
+            "duration_min": 1,
+            "max_duration_min": 15,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [
+              "Romag Robot",
               "Incubation Robot"
             ],
-            "robot_duration_min": 3,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 2
           },
           {
-            "name": "Seg 4 \u2013 Resuspension",
-            "duration_min": 50,
+            "name": "Sample results",
+            "duration_min": 12,
+            "max_duration_min": 25,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 0
           },
           {
-            "name": "Seg 5 \u2013 Transfer",
-            "duration_min": 50,
+            "name": "Activation",
+            "duration_min": 7,
+            "max_duration_min": 70,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [],
+            "robot_duration_min": 0
+          },
+          {
+            "name": "Final Activities",
+            "duration_min": 1,
+            "max_duration_min": 15,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [
+              "Romag Robot"
+            ],
+            "robot_duration_min": 0
+          },
+          {
+            "name": "STR transfer",
+            "duration_min": 1,
+            "max_duration_min": 8,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": true,
+            "robot_types": [
+              "Romag Robot",
               "Incubation Robot"
             ],
-            "robot_duration_min": 10,
-            "max_duration_min": 0,
-            "overlap_next_step": true
+            "robot_duration_min": 1
+          },
+          {
+            "name": "Unloading",
+            "duration_min": 5,
+            "max_duration_min": 25,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": true,
+            "robot_types": [
+              "Romag Robot"
+            ],
+            "robot_duration_min": 5
           }
         ]
       },
@@ -64,35 +150,39 @@
         "phase_label": "UP_INC (1st)",
         "phase_key": "UP_INC",
         "equipment_type": "Incubator",
-        "duration_min": 2880,
-        "min_duration_min": 120,
-        "max_duration_min": 4320,
+        "duration_min": 621,
         "segments": [
           {
             "name": "STR Transfer",
-            "duration_min": 15,
+            "duration_min": 1,
+            "max_duration_min": 8,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [
               "Incubation Robot"
             ],
-            "robot_duration_min": 15,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 1
           },
           {
-            "name": "Min Incubation Time",
-            "duration_min": 105,
+            "name": "Min Incubation",
+            "duration_min": 120,
+            "max_duration_min": 1080,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 0
           },
           {
             "name": "Incubation",
-            "duration_min": 2760,
+            "duration_min": 500,
+            "max_duration_min": 0,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": true,
             "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 4200,
-            "overlap_next_step": false
+            "robot_duration_min": 0
           }
         ]
       },
@@ -102,23 +192,31 @@
         "phase_label": "UP_BSD (1st)",
         "phase_key": "UP_BSD",
         "equipment_type": "BSD Sampling",
-        "duration_min": 120,
+        "duration_min": 8,
         "segments": [
           {
-            "name": "Sample Collection",
-            "duration_min": 60,
-            "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "name": "Sample collection",
+            "duration_min": 5,
+            "max_duration_min": 8,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 5
           },
           {
-            "name": "Bead Selection",
-            "duration_min": 60,
-            "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "name": "Transfer sample to PAT",
+            "duration_min": 3,
+            "max_duration_min": 5,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 3
           }
         ]
       },
@@ -128,35 +226,39 @@
         "phase_label": "UP_INC (2nd)",
         "phase_key": "UP_INC",
         "equipment_type": "Incubator",
-        "duration_min": 1440,
-        "min_duration_min": 120,
-        "max_duration_min": 2880,
+        "duration_min": 502,
         "segments": [
           {
             "name": "STR Transfer",
-            "duration_min": 15,
+            "duration_min": 1,
+            "max_duration_min": 8,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [
               "Incubation Robot"
             ],
-            "robot_duration_min": 15,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 1
           },
           {
-            "name": "Min Incubation Time",
-            "duration_min": 105,
+            "name": "Incubating",
+            "duration_min": 500,
+            "max_duration_min": 1080,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": true,
             "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 0
           },
           {
-            "name": "Incubation",
-            "duration_min": 1320,
+            "name": "None",
+            "duration_min": 1,
+            "max_duration_min": 0,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 2760,
-            "overlap_next_step": false
+            "robot_duration_min": 0
           }
         ]
       },
@@ -166,43 +268,65 @@
         "phase_label": "UP_TxD",
         "phase_key": "UP_TxD",
         "equipment_type": "Romag",
-        "duration_min": 360,
+        "duration_min": 31,
         "segments": [
           {
-            "name": "Seg 1 \u2013 Transduction Prep",
-            "duration_min": 90,
+            "name": "loading",
+            "duration_min": 8,
+            "max_duration_min": 0,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [
+              "Romag Robot",
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 5
+          },
+          {
+            "name": "Process",
+            "duration_min": 18,
+            "max_duration_min": 0,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [],
+            "robot_duration_min": 0
+          },
+          {
+            "name": "Final activities",
+            "duration_min": 1,
+            "max_duration_min": 0,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [
               "Romag Robot"
             ],
-            "robot_duration_min": 5,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 0
           },
           {
-            "name": "Seg 2 \u2013 Transduction",
-            "duration_min": 90,
-            "robot_types": [],
-            "robot_duration_min": 0,
+            "name": "Move STR",
+            "duration_min": 1,
             "max_duration_min": 0,
-            "overlap_next_step": false
-          },
-          {
-            "name": "Seg 3 \u2013 Media Exchange",
-            "duration_min": 90,
-            "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 0,
-            "overlap_next_step": false
-          },
-          {
-            "name": "Seg 4 \u2013 Post-Transduction",
-            "duration_min": 90,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [
-              "Romag Robot"
+              "Romag Robot",
+              "Incubation Robot"
             ],
-            "robot_duration_min": 5,
+            "robot_duration_min": 5
+          },
+          {
+            "name": "Unload",
+            "duration_min": 3,
             "max_duration_min": 0,
-            "overlap_next_step": false
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": true,
+            "robot_types": [],
+            "robot_duration_min": 0
           }
         ]
       },
@@ -212,35 +336,27 @@
         "phase_label": "UP_INC (3rd)",
         "phase_key": "UP_INC",
         "equipment_type": "Incubator",
-        "duration_min": 2880,
-        "min_duration_min": 120,
-        "max_duration_min": 5760,
+        "duration_min": 501,
         "segments": [
           {
             "name": "STR Transfer",
-            "duration_min": 15,
-            "robot_types": [
-              "Incubation Robot"
-            ],
-            "robot_duration_min": 15,
+            "duration_min": 1,
             "max_duration_min": 0,
-            "overlap_next_step": false
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [],
+            "robot_duration_min": 0
           },
           {
-            "name": "Min Incubation Time",
-            "duration_min": 105,
-            "robot_types": [],
-            "robot_duration_min": 0,
+            "name": "Incubating",
+            "duration_min": 500,
             "max_duration_min": 0,
-            "overlap_next_step": false
-          },
-          {
-            "name": "Incubation",
-            "duration_min": 2760,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 5640,
-            "overlap_next_step": false
+            "robot_duration_min": 0
           }
         ]
       },
@@ -250,23 +366,31 @@
         "phase_label": "UP_BSD (2nd)",
         "phase_key": "UP_BSD",
         "equipment_type": "BSD Sampling",
-        "duration_min": 120,
+        "duration_min": 8,
         "segments": [
           {
             "name": "Sample Collection",
-            "duration_min": 60,
-            "robot_types": [],
-            "robot_duration_min": 0,
+            "duration_min": 5,
             "max_duration_min": 0,
-            "overlap_next_step": false
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 5
           },
           {
-            "name": "Bead Selection",
-            "duration_min": 60,
-            "robot_types": [],
-            "robot_duration_min": 0,
+            "name": "Transfer sample to PAT",
+            "duration_min": 3,
             "max_duration_min": 0,
-            "overlap_next_step": false
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 3
           }
         ]
       },
@@ -276,35 +400,27 @@
         "phase_label": "UP_INC (4th)",
         "phase_key": "UP_INC",
         "equipment_type": "Incubator",
-        "duration_min": 1440,
-        "min_duration_min": 120,
-        "max_duration_min": 2880,
+        "duration_min": 501,
         "segments": [
           {
             "name": "STR Transfer",
-            "duration_min": 15,
-            "robot_types": [
-              "Incubation Robot"
-            ],
-            "robot_duration_min": 15,
+            "duration_min": 1,
             "max_duration_min": 0,
-            "overlap_next_step": false
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [],
+            "robot_duration_min": 0
           },
           {
-            "name": "Min Incubation Time",
-            "duration_min": 105,
-            "robot_types": [],
-            "robot_duration_min": 0,
+            "name": "Incubating",
+            "duration_min": 500,
             "max_duration_min": 0,
-            "overlap_next_step": false
-          },
-          {
-            "name": "Incubation",
-            "duration_min": 1320,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": true,
             "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 2760,
-            "overlap_next_step": false
+            "robot_duration_min": 0
           }
         ]
       },
@@ -314,52 +430,65 @@
         "phase_label": "UP_DHWF",
         "phase_key": "UP_DHWF",
         "equipment_type": "Romag",
-        "duration_min": 480,
-        "chain_to_next": true,
+        "duration_min": 119,
         "segments": [
           {
-            "name": "Seg 1 \u2013 Harvest Prep",
-            "duration_min": 96,
+            "name": "Loading",
+            "duration_min": 15,
+            "max_duration_min": 0,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [
               "Romag Robot"
             ],
-            "robot_duration_min": 5,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 15
           },
           {
-            "name": "Seg 2 \u2013 Cell Harvest",
-            "duration_min": 96,
+            "name": "Process",
+            "duration_min": 93,
+            "max_duration_min": 0,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 0
           },
           {
-            "name": "Seg 3 \u2013 Wash",
-            "duration_min": 96,
-            "robot_types": [],
-            "robot_duration_min": 0,
+            "name": "Post activities",
+            "duration_min": 5,
             "max_duration_min": 0,
-            "overlap_next_step": false
-          },
-          {
-            "name": "Seg 4 \u2013 Formulation",
-            "duration_min": 96,
-            "robot_types": [],
-            "robot_duration_min": 0,
-            "max_duration_min": 0,
-            "overlap_next_step": false
-          },
-          {
-            "name": "Seg 5 \u2013 Final Transfer",
-            "duration_min": 96,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [
-              "Incubation Robot"
+              "Romag Robot"
             ],
-            "robot_duration_min": 5,
+            "robot_duration_min": 5
+          },
+          {
+            "name": "Move material",
+            "duration_min": 1,
             "max_duration_min": 0,
-            "overlap_next_step": false
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [
+              "Romag Robot"
+            ],
+            "robot_duration_min": 1
+          },
+          {
+            "name": "Unload",
+            "duration_min": 5,
+            "max_duration_min": 0,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [
+              "Romag Robot"
+            ],
+            "robot_duration_min": 5
           }
         ]
       },
@@ -369,33 +498,49 @@
         "phase_label": "UP_FILL",
         "phase_key": "UP_FILL",
         "equipment_type": "Fill",
-        "duration_min": 180,
+        "duration_min": 17,
         "segments": [
           {
-            "name": "Fill Setup",
-            "duration_min": 30,
-            "robot_types": [],
-            "robot_duration_min": 0,
+            "name": "Loading",
+            "duration_min": 5,
             "max_duration_min": 0,
-            "overlap_next_step": false
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [],
+            "robot_duration_min": 0
           },
           {
             "name": "Filling",
-            "duration_min": 120,
+            "duration_min": 10,
+            "max_duration_min": 0,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
             "robot_types": [
               "Fill Robot"
             ],
-            "robot_duration_min": 120,
-            "max_duration_min": 0,
-            "overlap_next_step": false
+            "robot_duration_min": 10
           },
           {
-            "name": "Seal & Label",
-            "duration_min": 30,
-            "robot_types": [],
-            "robot_duration_min": 0,
+            "name": "transfer",
+            "duration_min": 1,
             "max_duration_min": 0,
-            "overlap_next_step": false
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [],
+            "robot_duration_min": 0
+          },
+          {
+            "name": "unloading",
+            "duration_min": 1,
+            "max_duration_min": 0,
+            "max_duration_type": "fixed",
+            "std_dev_sec": 0,
+            "overlap_next_step": false,
+            "robot_types": [],
+            "robot_duration_min": 0
           }
         ]
       }
@@ -722,15 +867,17 @@
     }
   ],
   "eq_efficiency": {
-    "Romag": 100,
-    "Incubator": 100,
-    "BSD Sampling": 100,
-    "BSD Weighing": 100,
-    "Fill": 100
+    "Romag": 80,
+    "Incubator": 80,
+    "BSD Sampling": 80,
+    "BSD Weighing": 80,
+    "Fill": 80
   },
   "reschedule_threshold_min": 0,
   "auto_start_grace_min": 0,
   "min_intro_interval_min": 0,
-  "inc4_to_dhwf_max_h": 6.0,
-  "fill_gap_max_h": 1.0
+  "inc4_to_dhwf_min_h": 1.0,
+  "inc4_to_dhwf_max_h": 2.0,
+  "fill_gap_max_h": 1.0,
+  "material_lead_h": 2.0
 }

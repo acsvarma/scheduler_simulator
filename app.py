@@ -460,7 +460,8 @@ _DEFAULTS = {
     "reschedule_threshold_min": 0,   # delay threshold before auto-reschedule fires
     "auto_start_grace_min": 0,       # minutes past scheduled_start to auto-mark IN_PROGRESS
     "min_intro_interval_min": 0,     # 0 = as fast as possible
-    "inc4_to_dhwf_max_h": 6.0,      # hours from INC(4th) min complete → DHWF start (0 = no limit)
+    "inc4_to_dhwf_min_h": 1.0,      # minimum hours from INC(4th) min complete to DHWF start
+    "inc4_to_dhwf_max_h": 2.0,      # maximum hours from INC(4th) min complete to DHWF start (0 = no limit)
     "fill_gap_max_h": 1.0,           # hours from DHWF end → FILL complete (0 = no limit)
     "material_lead_h": 2.0,          # hours before process start that material must be loaded
     "live_mode": False,              # drive status from system clock automatically
@@ -487,7 +488,7 @@ if "initialized" not in st.session_state:
         if loaded_defaults:
             for k in ("sequences", "equipment", "eq_efficiency",
                       "reschedule_threshold_min", "auto_start_grace_min",
-                      "min_intro_interval_min", "inc4_to_dhwf_max_h", "fill_gap_max_h",
+                      "min_intro_interval_min", "inc4_to_dhwf_min_h", "inc4_to_dhwf_max_h", "fill_gap_max_h",
                       "material_lead_h"):
                 if k in loaded_defaults:
                     st.session_state[k] = loaded_defaults[k]
@@ -571,12 +572,21 @@ with st.sidebar:
     )
     st.session_state.min_intro_interval_min = int(intro_h * 60)
 
+    inc4_dhwf_min_h = st.number_input(
+        "INC(4th) → DHWF min (h)",
+        min_value=0.0, max_value=24.0, step=0.5,
+        value=float(st.session_state.get("inc4_to_dhwf_min_h", 1.0)),
+        format="%.1f",
+        help="Minimum hours from INC(4th) minimum incubation completion to DHWF start.",
+    )
+    st.session_state.inc4_to_dhwf_min_h = inc4_dhwf_min_h
+
     inc4_dhwf_h = st.number_input(
         "INC(4th) → DHWF max (h)",
         min_value=0.0, max_value=72.0, step=0.5,
-        value=float(st.session_state.get("inc4_to_dhwf_max_h", 6.0)),
+        value=float(st.session_state.get("inc4_to_dhwf_max_h", 2.0)),
         format="%.1f",
-        help="Max hours from INC(4th) minimum incubation completion to DHWF start. 0 = no limit.",
+        help="Maximum hours from INC(4th) minimum incubation completion to DHWF start. 0 = no limit.",
     )
     st.session_state.inc4_to_dhwf_max_h = inc4_dhwf_h
 
@@ -623,7 +633,8 @@ with st.sidebar:
                     "reschedule_threshold_min":  st.session_state.get("reschedule_threshold_min", 0),
                     "auto_start_grace_min":      st.session_state.get("auto_start_grace_min", 0),
                     "min_intro_interval_min":    st.session_state.get("min_intro_interval_min", 0),
-                    "inc4_to_dhwf_max_h":        st.session_state.get("inc4_to_dhwf_max_h", 6.0),
+                    "inc4_to_dhwf_min_h":        st.session_state.get("inc4_to_dhwf_min_h", 1.0),
+                    "inc4_to_dhwf_max_h":        st.session_state.get("inc4_to_dhwf_max_h", 2.0),
                     "fill_gap_max_h":            st.session_state.get("fill_gap_max_h", 1.0),
                     "material_lead_h":           st.session_state.get("material_lead_h", 2.0),
                 }
@@ -789,7 +800,7 @@ def _gantt(batches: List[ScheduledBatch], y_col: str, color_col: str, color_map=
     return fig
 
 
-def _check_timing_constraints(batches, inc4_to_dhwf_max_min: int, fill_gap_max_min: int) -> list:
+def _check_timing_constraints(batches, inc4_to_dhwf_min_min: int, inc4_to_dhwf_max_min: int, fill_gap_max_min: int) -> list:
     """Return list of human-readable constraint violation strings for the current schedule."""
     from collections import defaultdict
     violations = []
@@ -806,14 +817,22 @@ def _check_timing_constraints(batches, inc4_to_dhwf_max_min: int, fill_gap_max_m
         dhwf = next((b for b in pt_batches if b.phase_name == "UP_DHWF"), None)
         fill = next((b for b in pt_batches if b.phase_name == "UP_FILL"), None)
 
-        if inc4 and dhwf and inc4_to_dhwf_max_min > 0:
+        if inc4 and dhwf:
             inc4_min_end = inc4.scheduled_start + timedelta(minutes=inc4_min_dur)
-            deadline = inc4_min_end + timedelta(minutes=inc4_to_dhwf_max_min)
-            if dhwf.scheduled_start > deadline:
-                over_min = int((dhwf.scheduled_start - deadline).total_seconds() / 60)
+            dhwf_gap_min = int((dhwf.scheduled_start - inc4_min_end).total_seconds() / 60)
+            if inc4_to_dhwf_min_min > 0 and dhwf_gap_min < inc4_to_dhwf_min_min:
+                short = inc4_to_dhwf_min_min - dhwf_gap_min
+                violations.append(
+                    f"**{pid}** — DHWF starts **{short} min too early** "
+                    f"(gap from INC(4th) min end to DHWF start: {dhwf_gap_min} min, "
+                    f"minimum required: {inc4_to_dhwf_min_min} min)."
+                )
+            if inc4_to_dhwf_max_min > 0 and dhwf_gap_min > inc4_to_dhwf_max_min:
+                over_min = dhwf_gap_min - inc4_to_dhwf_max_min
                 violations.append(
                     f"**{pid}** — DHWF starts **{over_min} min ({over_min/60:.1f}h) late** "
-                    f"vs the {inc4_to_dhwf_max_min//60}h window after INC(4th) min incubation."
+                    f"(gap from INC(4th) min end to DHWF start: {dhwf_gap_min} min, "
+                    f"window: {inc4_to_dhwf_min_min//60}h–{inc4_to_dhwf_max_min//60}h)."
                 )
 
         if dhwf and fill and fill_gap_max_min > 0:
@@ -848,7 +867,8 @@ def _do_generate():
         st.session_state.schedule_start,
         eq_efficiency=st.session_state.get("eq_efficiency", {}),
         min_intro_interval_min=int(st.session_state.get("min_intro_interval_min", 0)),
-        inc4_to_dhwf_max_min=int(st.session_state.get("inc4_to_dhwf_max_h", 6.0) * 60),
+        inc4_to_dhwf_min_min=int(st.session_state.get("inc4_to_dhwf_min_h", 1.0) * 60),
+        inc4_to_dhwf_max_min=int(st.session_state.get("inc4_to_dhwf_max_h", 2.0) * 60),
         fill_gap_max_min=int(st.session_state.get("fill_gap_max_h", 1.0) * 60),
     )
     st.session_state.schedule = batches
@@ -1766,9 +1786,10 @@ if PAGE == "📊 Dashboard":
             st.dataframe(pd.DataFrame(ct_rows), use_container_width=True, hide_index=True)
 
     # ── Timing constraint violations ─────────────────────────────────────────
-    _inc4_max_min = int(st.session_state.get("inc4_to_dhwf_max_h", 6.0) * 60)
+    _inc4_min_min = int(st.session_state.get("inc4_to_dhwf_min_h", 1.0) * 60)
+    _inc4_max_min = int(st.session_state.get("inc4_to_dhwf_max_h", 2.0) * 60)
     _fill_max_min = int(st.session_state.get("fill_gap_max_h", 1.0) * 60)
-    _violations = _check_timing_constraints(batches, _inc4_max_min, _fill_max_min)
+    _violations = _check_timing_constraints(batches, _inc4_min_min, _inc4_max_min, _fill_max_min)
     if _violations:
         st.markdown("### 🚨 Timing Constraint Violations")
         for v in _violations:

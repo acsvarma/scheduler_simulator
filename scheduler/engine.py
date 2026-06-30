@@ -293,6 +293,26 @@ class SchedulingEngine:
         This prevents the common failure where the incubator frees at T+10h but the
         ROMAG is free at T+0 (or vice versa), causing an unnecessary wait.
         """
+        # Estimate when an incubator will be free, accounting for:
+        #   1. actual eq_cal blocks (from completed Phase B runs), AND
+        #   2. pending wave-Phase-A assignments not yet in eq_cal.
+        # Each additional pending assignment adds one est_occupancy cycle on top of
+        # the last known block end, giving correct estimates for patients 49, 50, ...
+        # within the same recycling wave without needing Phase B data.
+        dhwf_idx = next(
+            (i for i, s in enumerate(self.process_sequence) if s.get("phase") == "UP_DHWF"), -1
+        )
+        est_occupancy = sum(
+            s["duration_min"] for s in (self.process_sequence[:dhwf_idx] if dhwf_idx >= 0 else [])
+        )
+
+        def _inc_free(inc_eq: Equipment) -> datetime:
+            slots = eq_cal.get(inc_eq.equipment_id, [])
+            base  = max((s[1] for s in slots), default=earliest)
+            usage = sum(1 for v in assigned_incubators.values() if v == inc_eq.equipment_id)
+            pending = max(0, usage - len(slots))
+            return base + timedelta(minutes=pending * est_occupancy)
+
         if patient.incubator_id:
             fixed = next(
                 (e for e in self.equipment_list if e.equipment_id == patient.incubator_id), None
@@ -303,48 +323,15 @@ class SchedulingEngine:
             all_incs   = [e for e in self._eq_by_type.get(EquipmentType.INCUBATOR, []) if e.is_available]
             candidates = [e for e in all_incs if e.equipment_id not in taken]
 
-        # For >47 patients the chosen incubator is already in use.  We store its
-        # estimated free time here so eff_t is set correctly below.  Phase A does
-        # NOT book incubators in eq_cal, so eq_cal.get() would return [] and
-        # inc_free would default to `earliest` — causing TSA to be scheduled
-        # before the incubator is free and creating a large TSA→INC_1 gap in Phase B.
-        _recycled_inc_free: Optional[datetime] = None
-
         if not candidates:
             all_incs = [e for e in self._eq_by_type.get(EquipmentType.INCUBATOR, []) if e.is_available]
             if not all_incs:
                 raise RuntimeError(f"No incubator available for patient {patient.patient_id}")
-
-            inc_order = {inc_id: i for i, inc_id in enumerate(assigned_incubators.values())}
-            dhwf_idx = next(
-                (i for i, s in enumerate(self.process_sequence) if s.get("phase") == "UP_DHWF"), -1
-            )
-            est_occupancy = sum(
-                s["duration_min"] for s in (self.process_sequence[:dhwf_idx] if dhwf_idx >= 0 else [])
-            )
-
-            def _est_free(inc_eq: Equipment) -> datetime:
-                slots = eq_cal.get(inc_eq.equipment_id, [])
-                if slots:
-                    return max(s[1] for s in slots)
-                # Use (order+1) so order=0 estimates ~1 occupancy cycle from earliest,
-                # not 0 (which incorrectly returns `earliest` for the first-assigned inc)
-                order = inc_order.get(inc_eq.equipment_id, 9999)
-                return earliest + timedelta(minutes=(order + 1) * est_occupancy)
-
-            best_recycled = min(all_incs, key=_est_free)
-            candidates = [best_recycled]
-            _recycled_inc_free = _est_free(best_recycled)
+            candidates = [min(all_incs, key=_inc_free)]
 
         best: Optional[Tuple] = None   # (incubator, romag_eq, start_dt)
         for inc in candidates:
-            if _recycled_inc_free is not None:
-                # >47 case: use the estimated free time, not eq_cal (which is empty for incubators in Phase A)
-                inc_free = _recycled_inc_free
-            else:
-                slots    = eq_cal.get(inc.equipment_id, [])
-                inc_free = max((s[1] for s in slots), default=earliest)
-            eff_t    = max(earliest, inc_free)
+            eff_t    = max(earliest, _inc_free(inc))
             eq, start = self._best_romag(eq_cal, robot_cals, eff_t, tsa_step)
             if best is None or start < best[2]:
                 best = (inc, eq, start)
@@ -359,6 +346,7 @@ class SchedulingEngine:
         schedule_start: datetime,
         eq_efficiency: Optional[Dict[str, float]] = None,
         min_intro_interval_min: int = 0,
+        inc4_to_dhwf_min_min: int = 0,
         inc4_to_dhwf_max_min: int = 0,
         fill_gap_max_min: int = 0,
     ) -> List[ScheduledBatch]:
@@ -394,174 +382,184 @@ class SchedulingEngine:
         tsa_step    = self.process_sequence[0]
         tsa_eff_dur = _effective_duration(tsa_step["duration_min"], EquipmentType.ROMAG)
 
-        # ── PHASE A: Plan all patient introductions before scheduling any other steps ──
+        # ── WAVE-BASED Phase A + Phase B ──────────────────────────────────────────────
         #
-        # By pre-booking every patient's UP_TSA (ROMAG + Romag Robot) now, Phase B's
-        # TxD and DHWF steps automatically yield to upcoming introduction windows
-        # rather than blocking them.  This is the key change from reactive
-        # ("wait until free") to proactive ("plan introductions first, fit other
-        # work around them").
+        # Patients are processed in waves equal to the number of available incubators
+        # (typically 47).  Within each wave, Phase A pre-books all TSA windows so
+        # Phase B's TxD/DHWF steps automatically defer to upcoming introduction windows.
+        # Completing Phase B before starting the next wave's Phase A means eq_cal
+        # contains real incubator blocks when _joint_tsa_start runs for recycled-
+        # incubator patients — eliminating the TSA→INC gap caused by stale estimates.
         #
-        intro_plan: Dict[str, Tuple] = {}   # patient_id → (incubator, romag_eq, start, end)
+        num_unique_incs = len(
+            [e for e in self._eq_by_type.get(EquipmentType.INCUBATOR, []) if e.is_available]
+        ) or len(sorted_patients)
+
         last_intro_start: Optional[datetime] = None
-        for patient in sorted_patients:
-            earliest_intro = schedule_start
-            if min_intro_interval_min > 0 and last_intro_start is not None:
-                earliest_intro = max(schedule_start, last_intro_start + timedelta(minutes=min_intro_interval_min))
-            inc, romag_eq, start = self._joint_tsa_start(
-                patient, eq_cal, robot_cals, assigned_incubators, earliest_intro, tsa_step
-            )
-            last_intro_start = start
-            end = start + timedelta(minutes=tsa_eff_dur)
-            assigned_incubators[patient.patient_id] = inc.equipment_id
-            patient.incubator_id = inc.equipment_id
-            intro_plan[patient.patient_id] = (inc, romag_eq, start, end)
-            # Commit introduction into the shared calendars so future introductions
-            # and all Phase B steps respect this window.
-            self._book(romag_eq, eq_cal, start, end)
-            self._book_robot(robot_cals, start, tsa_step)
 
-        # ── PHASE B: Schedule remaining steps (INC → FILL) for each patient ──────────
-        #
-        # For TxD and DHWF (ROMAG steps), _best_romag now sees Phase A's bookings in
-        # eq_cal / robot_cals and naturally defers to after any planned introduction
-        # window — no explicit logic needed.
-        #
-        for patient in sorted_patients:
-            incubator, romag_eq_0, tsa_start, tsa_end = intro_plan[patient.patient_id]
-            current_time   = schedule_start
-            patient_batches: List[ScheduledBatch] = []
-            prev_inc_info:  Optional[Tuple] = None   # (batch, eq, step_cfg)
-            inc4_min_end:   Optional[datetime] = None
+        for wave_offset in range(0, len(sorted_patients), num_unique_incs):
+            wave = sorted_patients[wave_offset : wave_offset + num_unique_incs]
+            intro_plan: Dict[str, Tuple] = {}   # patient_id → (incubator, romag_eq, start, end)
 
-            for step_idx, step in enumerate(self.process_sequence):
-                eq_type  = step["equipment_type"]
-                duration = _effective_duration(step["duration_min"], eq_type)
-                min_dur  = step.get("min_duration_min", duration)
-
-                # ── Find start, equipment, booked_end ─────────────────────────
-                if step_idx == 0:
-                    # Introduction already committed in Phase A — reuse without re-booking.
-                    equipment  = romag_eq_0
-                    start_step = tsa_start
-                    booked_end = tsa_end
-                    # skip _book / _book_robot — Phase A already did them
-
-                elif step.get("chain_to_next") and step_idx + 1 < len(self.process_sequence):
-                    # Compute INC4→DHWF deadline so _schedule_chained won't chase Fill
-                    # alignment past it
-                    _dhwf_deadline = None
-                    if inc4_to_dhwf_max_min > 0 and inc4_min_end is not None:
-                        _dhwf_deadline = inc4_min_end + timedelta(minutes=inc4_to_dhwf_max_min)
-                    equipment, start_step = self._schedule_chained(
-                        step, self.process_sequence[step_idx + 1],
-                        eq_cal, robot_cals, current_time,
-                        fill_gap_max_min=fill_gap_max_min,
-                        dhwf_deadline=_dhwf_deadline,
-                    )
-                    booked_end = start_step + timedelta(minutes=duration)
-                    self._book(equipment, eq_cal, start_step, booked_end)
-                    self._book_robot(robot_cals, start_step, step)
-
-                elif eq_type == EquipmentType.ROMAG:
-                    # _best_romag respects Phase A windows because they are already
-                    # in eq_cal/robot_cals — TxD/DHWF are planned around introductions.
-                    equipment, start_step = self._best_romag(eq_cal, robot_cals, current_time, step)
-                    booked_end = start_step + timedelta(minutes=duration)
-                    self._book(equipment, eq_cal, start_step, booked_end)
-                    self._book_robot(robot_cals, start_step, step)
-
-                elif eq_type == EquipmentType.INCUBATOR:
-                    equipment  = incubator
-                    start_step = self._find_valid_start_with_robot(
-                        equipment, eq_cal, robot_cals, current_time, step
-                    )
-                    booked_end = start_step + timedelta(minutes=min_dur)
-                    self._book(equipment, eq_cal, start_step, booked_end)
-                    self._book_robot(robot_cals, start_step, step)
-
-                else:
-                    eqs = self._eq_by_type.get(eq_type, [])
-                    if not eqs:
-                        continue
-                    equipment  = eqs[0]
-                    start_step = self._find_valid_start_with_robot(
-                        equipment, eq_cal, robot_cals, current_time, step
-                    )
-                    booked_end = start_step + timedelta(minutes=duration)
-                    self._book(equipment, eq_cal, start_step, booked_end)
-                    self._book_robot(robot_cals, start_step, step)
-
-                # ── Retroactively extend previous INC to cover waiting time ──
-                if prev_inc_info is not None and eq_type != EquipmentType.INCUBATOR:
-                    prev_batch, prev_eq, prev_step_cfg = prev_inc_info
-                    if start_step > prev_batch.scheduled_end:
-                        new_end = start_step
-                        # Cap extension at step-level max_duration_min if set
-                        max_inc_min = prev_step_cfg.get("max_duration_min", 0)
-                        if max_inc_min > 0:
-                            hard_cap = prev_batch.scheduled_start + timedelta(minutes=max_inc_min)
-                            new_end = min(new_end, hard_cap)
-                        self._rebook_end(
-                            prev_eq, eq_cal,
-                            prev_batch.scheduled_start,
-                            prev_batch.scheduled_end,
-                            new_end,
-                        )
-                        prev_batch.scheduled_end       = new_end
-                        prev_batch.target_duration_min = int(
-                            (new_end - prev_batch.scheduled_start).total_seconds() / 60
-                        )
-                    prev_inc_info = None
-
-                # ── Create and register batch ─────────────────────────────────
-                batch = ScheduledBatch(
-                    batch_id=f"{patient.patient_id}__{step['phase']}",
-                    patient_id=patient.patient_id,
-                    phase_name=step["phase"],
-                    phase_label=step["phase_label"],
-                    phase_key=step["phase_key"],
-                    step_index=step["step"],
-                    equipment_id=equipment.equipment_id,
-                    equipment_type=eq_type,
-                    scheduled_start=start_step,
-                    scheduled_end=booked_end,
-                    target_duration_min=min_dur if eq_type == EquipmentType.INCUBATOR else duration,
-                    segments=_make_segments(patient, step),
-                    robot_offsets=self._robot_offsets(step),
+            # ── Phase A for this wave ──────────────────────────────────────────────
+            for patient in wave:
+                earliest_intro = schedule_start
+                if min_intro_interval_min > 0 and last_intro_start is not None:
+                    earliest_intro = max(schedule_start, last_intro_start + timedelta(minutes=min_intro_interval_min))
+                inc, romag_eq, start = self._joint_tsa_start(
+                    patient, eq_cal, robot_cals, assigned_incubators, earliest_intro, tsa_step
                 )
-                all_batches.append(batch)
-                patient_batches.append(batch)
+                last_intro_start = start
+                end = start + timedelta(minutes=tsa_eff_dur)
+                assigned_incubators[patient.patient_id] = inc.equipment_id
+                patient.incubator_id = inc.equipment_id
+                intro_plan[patient.patient_id] = (inc, romag_eq, start, end)
+                # Commit introduction into the shared calendars so future introductions
+                # and all Phase B steps respect this window.
+                self._book(romag_eq, eq_cal, start, end)
+                self._book_robot(robot_cals, start, tsa_step)
 
-                if eq_type == EquipmentType.INCUBATOR:
-                    prev_inc_info = (batch, equipment, step)
-                    # Track when INC_4 minimum incubation time completes (DHWF deadline anchor)
-                    if step["phase"] == "UP_INC_4":
-                        inc4_min_end = start_step + timedelta(minutes=step.get("min_duration_min", min_dur))
+            # ── Phase B for this wave ──────────────────────────────────────────────
+            for patient in wave:
+                incubator, romag_eq_0, tsa_start, tsa_end = intro_plan[patient.patient_id]
+                current_time   = schedule_start
+                patient_batches: List[ScheduledBatch] = []
+                prev_inc_info:  Optional[Tuple] = None   # (batch, eq, step_cfg)
+                inc4_min_end:   Optional[datetime] = None
 
-                # ── Advance current_time ──────────────────────────────────────
-                if eq_type == EquipmentType.INCUBATOR:
-                    current_time = start_step + timedelta(minutes=min_dur)
-                else:
-                    overlap_min  = self._step_overlap_tail_min(step)
-                    current_time = booked_end - timedelta(minutes=overlap_min)
+                for step_idx, step in enumerate(self.process_sequence):
+                    eq_type  = step["equipment_type"]
+                    duration = _effective_duration(step["duration_min"], eq_type)
+                    min_dur  = step.get("min_duration_min", duration)
 
-            # ── Reserve incubator as one continuous block (TSA start → DHWF start) ──
-            dhwf_batch = next((b for b in patient_batches if b.phase_name == "UP_DHWF"), None)
-            if patient_batches and dhwf_batch:
-                inc_block_start = patient_batches[0].scheduled_start
-                inc_block_end   = dhwf_batch.scheduled_start
-                inc_starts = {
-                    b.scheduled_start for b in patient_batches
-                    if b.equipment_type == EquipmentType.INCUBATOR
-                }
-                eq_cal[incubator.equipment_id] = sorted([
-                    (s, e) for (s, e) in eq_cal.get(incubator.equipment_id, [])
-                    if s not in inc_starts
-                ])
-                self._book(incubator, eq_cal, inc_block_start, inc_block_end)
+                    # ── Find start, equipment, booked_end ─────────────────────────
+                    if step_idx == 0:
+                        # Introduction already committed in Phase A — reuse without re-booking.
+                        equipment  = romag_eq_0
+                        start_step = tsa_start
+                        booked_end = tsa_end
+                        # skip _book / _book_robot — Phase A already did them
 
-            patient.status = "Scheduled"
+                    elif step.get("chain_to_next") and step_idx + 1 < len(self.process_sequence):
+                        # Compute INC4→DHWF deadline so _schedule_chained won't chase Fill
+                        # alignment past it
+                        _dhwf_deadline = None
+                        if inc4_to_dhwf_max_min > 0 and inc4_min_end is not None:
+                            _dhwf_deadline = inc4_min_end + timedelta(minutes=inc4_to_dhwf_max_min)
+                        equipment, start_step = self._schedule_chained(
+                            step, self.process_sequence[step_idx + 1],
+                            eq_cal, robot_cals, current_time,
+                            fill_gap_max_min=fill_gap_max_min,
+                            dhwf_deadline=_dhwf_deadline,
+                        )
+                        booked_end = start_step + timedelta(minutes=duration)
+                        self._book(equipment, eq_cal, start_step, booked_end)
+                        self._book_robot(robot_cals, start_step, step)
+
+                    elif eq_type == EquipmentType.ROMAG:
+                        # _best_romag respects Phase A windows because they are already
+                        # in eq_cal/robot_cals — TxD/DHWF are planned around introductions.
+                        equipment, start_step = self._best_romag(eq_cal, robot_cals, current_time, step)
+                        booked_end = start_step + timedelta(minutes=duration)
+                        self._book(equipment, eq_cal, start_step, booked_end)
+                        self._book_robot(robot_cals, start_step, step)
+
+                    elif eq_type == EquipmentType.INCUBATOR:
+                        equipment  = incubator
+                        start_step = self._find_valid_start_with_robot(
+                            equipment, eq_cal, robot_cals, current_time, step
+                        )
+                        booked_end = start_step + timedelta(minutes=min_dur)
+                        self._book(equipment, eq_cal, start_step, booked_end)
+                        self._book_robot(robot_cals, start_step, step)
+
+                    else:
+                        eqs = self._eq_by_type.get(eq_type, [])
+                        if not eqs:
+                            continue
+                        equipment  = eqs[0]
+                        start_step = self._find_valid_start_with_robot(
+                            equipment, eq_cal, robot_cals, current_time, step
+                        )
+                        booked_end = start_step + timedelta(minutes=duration)
+                        self._book(equipment, eq_cal, start_step, booked_end)
+                        self._book_robot(robot_cals, start_step, step)
+
+                    # ── Retroactively extend previous INC to cover waiting time ──
+                    if prev_inc_info is not None and eq_type != EquipmentType.INCUBATOR:
+                        prev_batch, prev_eq, prev_step_cfg = prev_inc_info
+                        if start_step > prev_batch.scheduled_end:
+                            new_end = start_step
+                            # Cap extension at step-level max_duration_min if set
+                            max_inc_min = prev_step_cfg.get("max_duration_min", 0)
+                            if max_inc_min > 0:
+                                hard_cap = prev_batch.scheduled_start + timedelta(minutes=max_inc_min)
+                                new_end = min(new_end, hard_cap)
+                            self._rebook_end(
+                                prev_eq, eq_cal,
+                                prev_batch.scheduled_start,
+                                prev_batch.scheduled_end,
+                                new_end,
+                            )
+                            prev_batch.scheduled_end       = new_end
+                            prev_batch.target_duration_min = int(
+                                (new_end - prev_batch.scheduled_start).total_seconds() / 60
+                            )
+                        prev_inc_info = None
+
+                    # ── Create and register batch ─────────────────────────────────
+                    batch = ScheduledBatch(
+                        batch_id=f"{patient.patient_id}__{step['phase']}",
+                        patient_id=patient.patient_id,
+                        phase_name=step["phase"],
+                        phase_label=step["phase_label"],
+                        phase_key=step["phase_key"],
+                        step_index=step["step"],
+                        equipment_id=equipment.equipment_id,
+                        equipment_type=eq_type,
+                        scheduled_start=start_step,
+                        scheduled_end=booked_end,
+                        target_duration_min=min_dur if eq_type == EquipmentType.INCUBATOR else duration,
+                        segments=_make_segments(patient, step),
+                        robot_offsets=self._robot_offsets(step),
+                    )
+                    all_batches.append(batch)
+                    patient_batches.append(batch)
+
+                    if eq_type == EquipmentType.INCUBATOR:
+                        prev_inc_info = (batch, equipment, step)
+                        # Track when INC_4 minimum incubation time completes (DHWF deadline anchor)
+                        if step["phase"] == "UP_INC_4":
+                            inc4_min_end = start_step + timedelta(minutes=step.get("min_duration_min", min_dur))
+
+                    # ── Advance current_time ──────────────────────────────────────
+                    if eq_type == EquipmentType.INCUBATOR:
+                        base_ct = start_step + timedelta(minutes=min_dur)
+                        # INC(4th): enforce minimum wait before DHWF can start
+                        if step.get("phase") == "UP_INC_4" and inc4_to_dhwf_min_min > 0:
+                            current_time = base_ct + timedelta(minutes=inc4_to_dhwf_min_min)
+                        else:
+                            current_time = base_ct
+                    else:
+                        overlap_min  = self._step_overlap_tail_min(step)
+                        current_time = booked_end - timedelta(minutes=overlap_min)
+
+                # ── Reserve incubator as one continuous block (TSA start → DHWF start) ──
+                dhwf_batch = next((b for b in patient_batches if b.phase_name == "UP_DHWF"), None)
+                if patient_batches and dhwf_batch:
+                    inc_block_start = patient_batches[0].scheduled_start
+                    inc_block_end   = dhwf_batch.scheduled_start
+                    inc_starts = {
+                        b.scheduled_start for b in patient_batches
+                        if b.equipment_type == EquipmentType.INCUBATOR
+                    }
+                    eq_cal[incubator.equipment_id] = sorted([
+                        (s, e) for (s, e) in eq_cal.get(incubator.equipment_id, [])
+                        if s not in inc_starts
+                    ])
+                    self._book(incubator, eq_cal, inc_block_start, inc_block_end)
+
+                patient.status = "Scheduled"
 
         # ── Store calendar state for next_intro_windows() ────────────────────
         self._eq_cal             = eq_cal
