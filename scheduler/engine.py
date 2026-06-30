@@ -192,11 +192,17 @@ class SchedulingEngine:
         eq_cal: Dict,
         robot_cals: Dict,
         earliest: datetime,
+        fill_gap_max_min: int = 0,
+        dhwf_deadline: Optional[datetime] = None,
     ) -> Tuple[Equipment, datetime]:
         """
-        Schedule `step` (DHWF) so its end coincides with `next_step`'s (FILL) earliest
-        available start.  Iterates until Romag availability and Fill availability align.
-        Falls back to normal Romag scheduling if no Fill equipment is configured.
+        Schedule DHWF so the gap between DHWF end and FILL start is within
+        fill_gap_max_min (0 = must chain immediately).  Iterates until
+        Romag + Fill availability align within the allowed window.
+
+        dhwf_deadline caps how late DHWF may start (INC4 timing constraint).
+        When Fill alignment would push DHWF past the deadline, we stop there
+        and accept the Fill gap rather than violating the INC4 deadline.
         """
         dur = step["duration_min"]
         next_eqs = [e for e in self._eq_by_type.get(next_step["equipment_type"], []) if e.is_available]
@@ -206,7 +212,13 @@ class SchedulingEngine:
         candidate = earliest
         for _ in range(50):
             eq, start = self._best_romag(eq_cal, robot_cals, candidate, step)
-            dhwf_end  = start + timedelta(minutes=dur)
+
+            # Never push DHWF past the INC4 deadline
+            if dhwf_deadline is not None and start > dhwf_deadline:
+                eq, start = self._best_romag(eq_cal, robot_cals, earliest, step)
+                return eq, min(start, dhwf_deadline) if False else (eq, start)
+
+            dhwf_end = start + timedelta(minutes=dur)
 
             # Earliest time Fill (including its robots) is available after dhwf_end
             fill_start = min(
@@ -214,11 +226,18 @@ class SchedulingEngine:
                 for nq in next_eqs
             )
 
-            if fill_start <= dhwf_end:
-                return eq, start  # Fill is available the moment DHWF ends ✓
+            # Compliant: Fill starts within allowed gap
+            if fill_start <= dhwf_end + timedelta(minutes=fill_gap_max_min):
+                return eq, start
 
-            # Fill is delayed: push DHWF to end exactly at fill_start
+            # Fill is delayed beyond the allowed window.
+            # Push DHWF later so it ends right when Fill becomes free.
             desired = fill_start - timedelta(minutes=dur)
+
+            # Don't push past the INC4→DHWF deadline
+            if dhwf_deadline is not None and desired > dhwf_deadline:
+                return eq, start  # accept Fill gap — INC4 deadline takes priority
+
             if desired <= candidate:
                 return eq, start  # no progress possible — accept current timing
             candidate = desired
@@ -420,9 +439,16 @@ class SchedulingEngine:
                     # skip _book / _book_robot — Phase A already did them
 
                 elif step.get("chain_to_next") and step_idx + 1 < len(self.process_sequence):
+                    # Compute INC4→DHWF deadline so _schedule_chained won't chase Fill
+                    # alignment past it
+                    _dhwf_deadline = None
+                    if inc4_to_dhwf_max_min > 0 and inc4_min_end is not None:
+                        _dhwf_deadline = inc4_min_end + timedelta(minutes=inc4_to_dhwf_max_min)
                     equipment, start_step = self._schedule_chained(
                         step, self.process_sequence[step_idx + 1],
                         eq_cal, robot_cals, current_time,
+                        fill_gap_max_min=fill_gap_max_min,
+                        dhwf_deadline=_dhwf_deadline,
                     )
                     booked_end = start_step + timedelta(minutes=duration)
                     self._book(equipment, eq_cal, start_step, booked_end)

@@ -817,12 +817,13 @@ def _check_timing_constraints(batches, inc4_to_dhwf_max_min: int, fill_gap_max_m
                 )
 
         if dhwf and fill and fill_gap_max_min > 0:
-            gap_min = int((fill.scheduled_end - dhwf.scheduled_end).total_seconds() / 60)
+            # Gap = idle waiting time between DHWF end and FILL start
+            gap_min = int((fill.scheduled_start - dhwf.scheduled_end).total_seconds() / 60)
             if gap_min > fill_gap_max_min:
                 over_min = gap_min - fill_gap_max_min
                 violations.append(
-                    f"**{pid}** — FILL completes **{over_min} min ({over_min/60:.1f}h) late** "
-                    f"vs the {fill_gap_max_min} min limit from DHWF end."
+                    f"**{pid}** — FILL starts **{over_min} min ({over_min/60:.1f}h) late** "
+                    f"(gap from DHWF end to FILL start: {gap_min} min, limit: {fill_gap_max_min} min)."
                 )
 
     return violations
