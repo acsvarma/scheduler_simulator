@@ -43,11 +43,13 @@ PROCESS_SEQUENCE = [
         "phase_label": "UP_INC (1st)",
         "phase_key": "UP_INC",
         "equipment_type": EquipmentType.INCUBATOR,
-        "duration_min": 2880,   # 48 h planned; scheduler uses min_duration_min then extends to next step
+        "duration_min": 2880,     # 48 h planned; scheduler uses min_duration_min then extends to next step
         "min_duration_min": 120,  # 2 h minimum before patient can move if equipment is available
+        "max_duration_min": 4320, # 72 h hard cap — must move on before this
         "segments": [
-            {"name": "Incubation Day 1", "duration_min": 1440, "robot_types": [], "robot_duration_min": 0, "max_duration_min": 0, "overlap_next_step": False},
-            {"name": "Incubation Day 2", "duration_min": 1440, "robot_types": [], "robot_duration_min": 0, "max_duration_min": 0, "overlap_next_step": False},
+            {"name": "STR Transfer",        "duration_min": 15,   "robot_types": ["Incubation Robot"], "robot_duration_min": 15, "max_duration_min": 0,    "overlap_next_step": False},
+            {"name": "Min Incubation Time", "duration_min": 105,  "robot_types": [],                   "robot_duration_min": 0,  "max_duration_min": 0,    "overlap_next_step": False},
+            {"name": "Incubation",          "duration_min": 2760, "robot_types": [],                   "robot_duration_min": 0,  "max_duration_min": 4200, "overlap_next_step": False},
         ],
     },
     {
@@ -68,10 +70,13 @@ PROCESS_SEQUENCE = [
         "phase_label": "UP_INC (2nd)",
         "phase_key": "UP_INC",
         "equipment_type": EquipmentType.INCUBATOR,
-        "duration_min": 1440,   # 24 h planned
+        "duration_min": 1440,     # 24 h planned
         "min_duration_min": 120,
+        "max_duration_min": 2880, # 48 h hard cap
         "segments": [
-            {"name": "Incubation", "duration_min": 1440, "robot_types": [], "robot_duration_min": 0, "max_duration_min": 0, "overlap_next_step": False},
+            {"name": "STR Transfer",        "duration_min": 15,   "robot_types": ["Incubation Robot"], "robot_duration_min": 15, "max_duration_min": 0,    "overlap_next_step": False},
+            {"name": "Min Incubation Time", "duration_min": 105,  "robot_types": [],                   "robot_duration_min": 0,  "max_duration_min": 0,    "overlap_next_step": False},
+            {"name": "Incubation",          "duration_min": 1320, "robot_types": [],                   "robot_duration_min": 0,  "max_duration_min": 2760, "overlap_next_step": False},
         ],
     },
     {
@@ -95,11 +100,13 @@ PROCESS_SEQUENCE = [
         "phase_label": "UP_INC (3rd)",
         "phase_key": "UP_INC",
         "equipment_type": EquipmentType.INCUBATOR,
-        "duration_min": 2880,   # 48 h planned
+        "duration_min": 2880,     # 48 h planned
         "min_duration_min": 120,
+        "max_duration_min": 5760, # 96 h hard cap
         "segments": [
-            {"name": "Incubation Day 1", "duration_min": 1440, "robot_types": [], "robot_duration_min": 0, "max_duration_min": 0, "overlap_next_step": False},
-            {"name": "Incubation Day 2", "duration_min": 1440, "robot_types": [], "robot_duration_min": 0, "max_duration_min": 0, "overlap_next_step": False},
+            {"name": "STR Transfer",        "duration_min": 15,   "robot_types": ["Incubation Robot"], "robot_duration_min": 15, "max_duration_min": 0,    "overlap_next_step": False},
+            {"name": "Min Incubation Time", "duration_min": 105,  "robot_types": [],                   "robot_duration_min": 0,  "max_duration_min": 0,    "overlap_next_step": False},
+            {"name": "Incubation",          "duration_min": 2760, "robot_types": [],                   "robot_duration_min": 0,  "max_duration_min": 5640, "overlap_next_step": False},
         ],
     },
     {
@@ -120,10 +127,13 @@ PROCESS_SEQUENCE = [
         "phase_label": "UP_INC (4th)",
         "phase_key": "UP_INC",
         "equipment_type": EquipmentType.INCUBATOR,
-        "duration_min": 1440,   # 24 h planned
+        "duration_min": 1440,     # 24 h planned
         "min_duration_min": 120,
+        "max_duration_min": 2880, # 48 h hard cap — DHWF must start within 6h after min completes
         "segments": [
-            {"name": "Incubation", "duration_min": 1440, "robot_types": [], "robot_duration_min": 0, "max_duration_min": 0, "overlap_next_step": False},
+            {"name": "STR Transfer",        "duration_min": 15,   "robot_types": ["Incubation Robot"], "robot_duration_min": 15, "max_duration_min": 0,    "overlap_next_step": False},
+            {"name": "Min Incubation Time", "duration_min": 105,  "robot_types": [],                   "robot_duration_min": 0,  "max_duration_min": 0,    "overlap_next_step": False},
+            {"name": "Incubation",          "duration_min": 1320, "robot_types": [],                   "robot_duration_min": 0,  "max_duration_min": 2760, "overlap_next_step": False},
         ],
     },
     {

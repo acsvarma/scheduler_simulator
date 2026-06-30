@@ -312,6 +312,8 @@ class SchedulingEngine:
         schedule_start: datetime,
         eq_efficiency: Optional[Dict[str, float]] = None,
         min_intro_interval_min: int = 0,
+        inc4_to_dhwf_max_min: int = 0,
+        fill_gap_max_min: int = 0,
     ) -> List[ScheduledBatch]:
         eff = eq_efficiency or {}
 
@@ -382,7 +384,8 @@ class SchedulingEngine:
             incubator, romag_eq_0, tsa_start, tsa_end = intro_plan[patient.patient_id]
             current_time   = schedule_start
             patient_batches: List[ScheduledBatch] = []
-            prev_inc_info:  Optional[Tuple] = None
+            prev_inc_info:  Optional[Tuple] = None   # (batch, eq, step_cfg)
+            inc4_min_end:   Optional[datetime] = None
 
             for step_idx, step in enumerate(self.process_sequence):
                 eq_type  = step["equipment_type"]
@@ -437,17 +440,23 @@ class SchedulingEngine:
 
                 # ── Retroactively extend previous INC to cover waiting time ──
                 if prev_inc_info is not None and eq_type != EquipmentType.INCUBATOR:
-                    prev_batch, prev_eq = prev_inc_info
+                    prev_batch, prev_eq, prev_step_cfg = prev_inc_info
                     if start_step > prev_batch.scheduled_end:
+                        new_end = start_step
+                        # Cap extension at step-level max_duration_min if set
+                        max_inc_min = prev_step_cfg.get("max_duration_min", 0)
+                        if max_inc_min > 0:
+                            hard_cap = prev_batch.scheduled_start + timedelta(minutes=max_inc_min)
+                            new_end = min(new_end, hard_cap)
                         self._rebook_end(
                             prev_eq, eq_cal,
                             prev_batch.scheduled_start,
                             prev_batch.scheduled_end,
-                            start_step,
+                            new_end,
                         )
-                        prev_batch.scheduled_end       = start_step
+                        prev_batch.scheduled_end       = new_end
                         prev_batch.target_duration_min = int(
-                            (start_step - prev_batch.scheduled_start).total_seconds() / 60
+                            (new_end - prev_batch.scheduled_start).total_seconds() / 60
                         )
                     prev_inc_info = None
 
@@ -471,7 +480,10 @@ class SchedulingEngine:
                 patient_batches.append(batch)
 
                 if eq_type == EquipmentType.INCUBATOR:
-                    prev_inc_info = (batch, equipment)
+                    prev_inc_info = (batch, equipment, step)
+                    # Track when INC_4 minimum incubation time completes (DHWF deadline anchor)
+                    if step["phase"] == "UP_INC_4":
+                        inc4_min_end = start_step + timedelta(minutes=step.get("min_duration_min", min_dur))
 
                 # ── Advance current_time ──────────────────────────────────────
                 if eq_type == EquipmentType.INCUBATOR:

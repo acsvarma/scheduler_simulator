@@ -460,6 +460,8 @@ _DEFAULTS = {
     "reschedule_threshold_min": 0,   # delay threshold before auto-reschedule fires
     "auto_start_grace_min": 0,       # minutes past scheduled_start to auto-mark IN_PROGRESS
     "min_intro_interval_min": 0,     # 0 = as fast as possible
+    "inc4_to_dhwf_max_h": 6.0,      # hours from INC(4th) min complete → DHWF start (0 = no limit)
+    "fill_gap_max_h": 1.0,           # hours from DHWF end → FILL complete (0 = no limit)
     "live_mode": False,              # drive status from system clock automatically
     "_live_auto_batches": set(),     # batch IDs already auto-rescheduled in live mode
 }
@@ -553,6 +555,24 @@ with st.sidebar:
         help="Minimum hours between consecutive patient introductions. 0 = schedule as fast as resources allow.",
     )
     st.session_state.min_intro_interval_min = int(intro_h * 60)
+
+    inc4_dhwf_h = st.number_input(
+        "INC(4th) → DHWF max (h)",
+        min_value=0.0, max_value=72.0, step=0.5,
+        value=float(st.session_state.get("inc4_to_dhwf_max_h", 6.0)),
+        format="%.1f",
+        help="Max hours from INC(4th) minimum incubation completion to DHWF start. 0 = no limit.",
+    )
+    st.session_state.inc4_to_dhwf_max_h = inc4_dhwf_h
+
+    fill_gap_h = st.number_input(
+        "DHWF → FILL complete max (h)",
+        min_value=0.0, max_value=24.0, step=0.5,
+        value=float(st.session_state.get("fill_gap_max_h", 1.0)),
+        format="%.1f",
+        help="Max hours from DHWF end to FILL step completion. 0 = no limit.",
+    )
+    st.session_state.fill_gap_max_h = fill_gap_h
     st.markdown("---")
     if _is_admin:
         st.markdown("---")
@@ -717,6 +737,45 @@ def _gantt(batches: List[ScheduledBatch], y_col: str, color_col: str, color_map=
     return fig
 
 
+def _check_timing_constraints(batches, inc4_to_dhwf_max_min: int, fill_gap_max_min: int) -> list:
+    """Return list of human-readable constraint violation strings for the current schedule."""
+    from collections import defaultdict
+    violations = []
+    by_patient: dict = defaultdict(list)
+    for b in batches:
+        by_patient[b.patient_id].append(b)
+
+    active_seq = st.session_state.sequences.get(st.session_state.active_sequence, [])
+    inc4_step_cfg = next((s for s in active_seq if s.get("phase") == "UP_INC_4"), None)
+    inc4_min_dur = inc4_step_cfg.get("min_duration_min", 120) if inc4_step_cfg else 120
+
+    for pid, pt_batches in sorted(by_patient.items()):
+        inc4 = next((b for b in pt_batches if b.phase_name == "UP_INC_4"), None)
+        dhwf = next((b for b in pt_batches if b.phase_name == "UP_DHWF"), None)
+        fill = next((b for b in pt_batches if b.phase_name == "UP_FILL"), None)
+
+        if inc4 and dhwf and inc4_to_dhwf_max_min > 0:
+            inc4_min_end = inc4.scheduled_start + timedelta(minutes=inc4_min_dur)
+            deadline = inc4_min_end + timedelta(minutes=inc4_to_dhwf_max_min)
+            if dhwf.scheduled_start > deadline:
+                over_min = int((dhwf.scheduled_start - deadline).total_seconds() / 60)
+                violations.append(
+                    f"**{pid}** — DHWF starts **{over_min} min ({over_min/60:.1f}h) late** "
+                    f"vs the {inc4_to_dhwf_max_min//60}h window after INC(4th) min incubation."
+                )
+
+        if dhwf and fill and fill_gap_max_min > 0:
+            gap_min = int((fill.scheduled_end - dhwf.scheduled_end).total_seconds() / 60)
+            if gap_min > fill_gap_max_min:
+                over_min = gap_min - fill_gap_max_min
+                violations.append(
+                    f"**{pid}** — FILL completes **{over_min} min ({over_min/60:.1f}h) late** "
+                    f"vs the {fill_gap_max_min} min limit from DHWF end."
+                )
+
+    return violations
+
+
 def _autosave():
     """Write current session to disk silently. Called after every state-changing action."""
     try:
@@ -736,6 +795,8 @@ def _do_generate():
         st.session_state.schedule_start,
         eq_efficiency=st.session_state.get("eq_efficiency", {}),
         min_intro_interval_min=int(st.session_state.get("min_intro_interval_min", 0)),
+        inc4_to_dhwf_max_min=int(st.session_state.get("inc4_to_dhwf_max_h", 6.0) * 60),
+        fill_gap_max_min=int(st.session_state.get("fill_gap_max_h", 1.0) * 60),
     )
     st.session_state.schedule = batches
     st.session_state.engine  = engine
@@ -1487,6 +1548,15 @@ if PAGE == "📊 Dashboard":
             ]
             st.dataframe(pd.DataFrame(ct_rows), use_container_width=True, hide_index=True)
 
+    # ── Timing constraint violations ─────────────────────────────────────────
+    _inc4_max_min = int(st.session_state.get("inc4_to_dhwf_max_h", 6.0) * 60)
+    _fill_max_min = int(st.session_state.get("fill_gap_max_h", 1.0) * 60)
+    _violations = _check_timing_constraints(batches, _inc4_max_min, _fill_max_min)
+    if _violations:
+        st.markdown("### 🚨 Timing Constraint Violations")
+        for v in _violations:
+            st.error(v)
+
     if delayed:
         st.markdown("### ⚠️ Delay Alerts")
         for b in delayed:
@@ -1648,7 +1718,17 @@ elif PAGE == "👥 Patient Orders":
 
             for p in sorted(st.session_state.patients, key=lambda x: x.priority):
                 c1, c2, c3, c4, c5 = st.columns([1, 2, 2, 2, 1])
-                c1.write(str(p.priority))
+                new_pri = c1.number_input(
+                    "Pri", min_value=1, max_value=999, value=p.priority,
+                    key=f"pri_{p.patient_id}", label_visibility="collapsed", step=1,
+                )
+                if new_pri != p.priority:
+                    p.priority = int(new_pri)
+                    if st.session_state.schedule:
+                        with st.spinner("Rescheduling…"):
+                            _do_generate()
+                    _autosave()
+                    st.rerun()
                 c2.write(p.patient_id)
                 c3.write(p.order_id or "—")
                 c4.write(p.status)
