@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*.pptx
+*.log
+scheduler_session.json
