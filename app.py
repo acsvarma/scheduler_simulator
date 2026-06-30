@@ -2234,25 +2234,164 @@ elif PAGE == "🔍 Monitor Batches":
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# EXECUTION LOG  (formerly Simulation — manual time entry for MES feed / testing)
+# SIMULATION
 # ══════════════════════════════════════════════════════════════════════════════
 elif PAGE == "⏱️ Simulation":
-    st.title("Execution Log")
+    st.title("Simulation")
     st.caption(
-        "Log actual timestamps from equipment/MES. "
-        "Rescheduling fires automatically based on the **Scheduling Controls** configured in the sidebar — "
-        "no manual confirmation required."
+        "Simulate equipment data sources reporting actual start/end times. "
+        "Use **Auto-Sim** to replay the plan automatically with configurable delays — "
+        "rescheduling fires whenever a batch ends late. "
+        "Use **Manual Entry** tabs to inject individual timestamps for specific scenarios."
     )
 
     if not st.session_state.schedule:
-        st.warning("Generate a schedule first.")
+        st.warning("Generate a schedule first (📅 Generate Schedule).")
         st.stop()
 
     sim: SimulationEngine    = st.session_state.sim
     engine: SchedulingEngine = st.session_state.engine
     _thr = int(st.session_state.reschedule_threshold_min)
 
-    tab_b, tab_s, tab_bulk, tab_io = st.tabs(["Batch Times", "Segment Times", "Bulk CSV", "Export / Import"])
+    tab_auto, tab_b, tab_s, tab_bulk, tab_io = st.tabs(
+        ["🚀 Auto-Sim", "Batch Times", "Segment Times", "Bulk CSV", "Export / Import"]
+    )
+
+    # ── Auto-Sim ───────────────────────────────────────────────────────────────
+    with tab_auto:
+        st.subheader("Auto Simulation")
+        st.caption(
+            "Step through the plan one batch at a time, or run the whole schedule to completion. "
+            "Set delays to simulate equipment or process variance — rescheduling fires automatically "
+            "whenever actual end exceeds scheduled end by more than the threshold in the sidebar."
+        )
+
+        # ── Progress bar ──────────────────────────────────────────────────────
+        _n_total = len(st.session_state.schedule)
+        _n_done  = sum(1 for b in st.session_state.schedule if b.actual_end is not None)
+        _n_todo  = _n_total - _n_done
+        st.progress(_n_done / max(_n_total, 1), text=f"{_n_done} / {_n_total} batches simulated")
+
+        # ── Delay controls ────────────────────────────────────────────────────
+        st.markdown("**Delay Settings**")
+        _dc1, _dc2 = st.columns([1, 2])
+        _global_delay = _dc1.number_input(
+            "Global delay (min)",
+            min_value=0, max_value=480, value=0, step=5,
+            help="Added to every batch's actual end time. 0 = schedule plays out exactly as planned.",
+            key="sim_global_delay_min",
+        )
+        with _dc2.expander("Per-phase delay overrides (min)"):
+            _active_seq_sim = st.session_state.sequences[st.session_state.active_sequence]
+            _phase_keys_sim = sorted({s["phase_key"] for s in _active_seq_sim})
+            _phase_delays: Dict[str, int] = {}
+            _pd_cols = st.columns(min(4, len(_phase_keys_sim)))
+            for _pi, _pk in enumerate(_phase_keys_sim):
+                _pd = _pd_cols[_pi % len(_pd_cols)].number_input(
+                    _pk, min_value=0, max_value=1440, value=0, step=5,
+                    key=f"sim_pd_{_pk}",
+                )
+                _phase_delays[_pk] = int(_pd)
+
+        # ── Action buttons ────────────────────────────────────────────────────
+        _todo_sorted = sorted(
+            [b for b in st.session_state.schedule if b.actual_end is None],
+            key=lambda b: (b.scheduled_start, b.step_index),
+        )
+        _b_step, _b_run, _b_reset = st.columns(3)
+
+        if _b_step.button("▶ Step", use_container_width=True,
+                          disabled=not _todo_sorted,
+                          help="Simulate the next scheduled batch."):
+            _nb = _todo_sorted[0]
+            _delay = int(_global_delay) + _phase_delays.get(_nb.phase_key, 0)
+            _a_start = _nb.scheduled_start
+            _a_end   = _nb.scheduled_end + timedelta(minutes=_delay)
+            sim.apply_batch_start(st.session_state.schedule, _nb.batch_id, _a_start)
+            sim.apply_batch_end(st.session_state.schedule, _nb.batch_id, _a_end, engine, _thr)
+            st.session_state._live_auto_batches.discard(_nb.batch_id)
+            # Event log
+            if "sim_event_log" not in st.session_state:
+                st.session_state.sim_event_log = []
+            _icon = "⚠️" if _delay > _thr else "✅"
+            _rsched_note = f" → reschedule fired (+{_delay} min)" if _delay > _thr else ""
+            st.session_state.sim_event_log.append(
+                f"{_icon} **{_nb.patient_id}** · {_nb.phase_label} · {_nb.equipment_id}  "
+                f"| {_a_start.strftime('%m/%d %H:%M')} → {_a_end.strftime('%m/%d %H:%M')}"
+                f"{_rsched_note}"
+            )
+            _autosave()
+            st.rerun()
+
+        if _b_run.button("⏭ Run to Completion", type="primary", use_container_width=True,
+                         disabled=not _todo_sorted,
+                         help="Simulate all remaining batches at once."):
+            if "sim_event_log" not in st.session_state:
+                st.session_state.sim_event_log = []
+            _processed: set = set()
+            _iter = 0
+            _reschedules = 0
+            while _iter < len(st.session_state.schedule) * 3:
+                _remaining = [
+                    b for b in st.session_state.schedule
+                    if b.actual_end is None and b.batch_id not in _processed
+                ]
+                if not _remaining:
+                    break
+                _nb = min(_remaining, key=lambda b: (b.scheduled_start, b.step_index))
+                _delay = int(_global_delay) + _phase_delays.get(_nb.phase_key, 0)
+                _a_start = _nb.scheduled_start
+                _a_end   = _nb.scheduled_end + timedelta(minutes=_delay)
+                sim.apply_batch_start(st.session_state.schedule, _nb.batch_id, _a_start)
+                sim.apply_batch_end(st.session_state.schedule, _nb.batch_id, _a_end, engine, _thr)
+                st.session_state._live_auto_batches.discard(_nb.batch_id)
+                _processed.add(_nb.batch_id)
+                if _delay > _thr:
+                    _reschedules += 1
+                    st.session_state.sim_event_log.append(
+                        f"⚠️ **{_nb.patient_id}** · {_nb.phase_label} +{_delay} min → reschedule"
+                    )
+                _iter += 1
+            st.session_state.sim_event_log.append(
+                f"✅ Simulation complete — {_iter} batches · {_reschedules} reschedule event(s)"
+            )
+            _autosave()
+            st.rerun()
+
+        if _b_reset.button("🔄 Reset", use_container_width=True,
+                           help="Clear all simulated timestamps and restore the original plan."):
+            sim.clear()
+            st.session_state._live_auto_batches.clear()
+            st.session_state.pop("sim_event_log", None)
+            for _b in st.session_state.schedule:
+                _b.actual_start = _b.actual_end = None
+                _b.status = BatchStatus.SCHEDULED
+                for _s in _b.segments:
+                    _s.actual_start = _s.actual_end = None
+                    _s.status = "Pending"
+            _autosave()
+            st.rerun()
+
+        # ── What's next ───────────────────────────────────────────────────────
+        if _todo_sorted:
+            _nb_preview = _todo_sorted[0]
+            st.markdown("---")
+            st.markdown("**Next batch to simulate**")
+            _p1, _p2, _p3, _p4 = st.columns(4)
+            _p1.metric("Patient",   _nb_preview.patient_id)
+            _p2.metric("Phase",     _nb_preview.phase_label)
+            _p3.metric("Equipment", _nb_preview.equipment_id)
+            _p4.metric("Sched Start", _nb_preview.scheduled_start.strftime("%m/%d %H:%M"))
+
+        # ── Event log ─────────────────────────────────────────────────────────
+        _ev_log = st.session_state.get("sim_event_log", [])
+        if _ev_log:
+            st.markdown("---")
+            st.markdown("**Event Log** (most recent first)")
+            for _ev in reversed(_ev_log[-60:]):
+                st.markdown(_ev)
+        elif _n_done == 0:
+            st.info("Click **▶ Step** to simulate the first batch, or **⏭ Run to Completion** to replay the entire plan.")
 
     # ── Batch times ────────────────────────────────────────────────────────────
     with tab_b:
