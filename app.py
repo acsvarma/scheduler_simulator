@@ -358,7 +358,10 @@ def _check_password() -> bool:
     )
     pwd = st.text_input("Password", type="password", placeholder="Enter access password")
     if st.button("Sign In", type="primary", use_container_width=True):
-        expected = st.secrets.get("APP_PASSWORD", "sirius2025")
+        try:
+            expected = st.secrets.get("APP_PASSWORD", "sirius2025")
+        except Exception:
+            expected = "sirius2025"
         if pwd == expected:
             st.session_state.authenticated = True
             st.rerun()
