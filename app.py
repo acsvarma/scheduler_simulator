@@ -426,6 +426,7 @@ _DEFAULTS = {
     # ── Scheduling policy controls ─────────────────────────────────────────────
     "reschedule_threshold_min": 0,   # delay threshold before auto-reschedule fires
     "auto_start_grace_min": 0,       # minutes past scheduled_start to auto-mark IN_PROGRESS
+    "min_intro_interval_min": 0,     # 0 = as fast as possible
     "live_mode": False,              # drive status from system clock automatically
     "_live_auto_batches": set(),     # batch IDs already auto-rescheduled in live mode
 }
@@ -506,6 +507,14 @@ with st.sidebar:
         format="%d",
         help="In Live Clock Mode: auto-mark batch IN_PROGRESS this many minutes after scheduled start.",
     )
+    intro_h = st.number_input(
+        "Min intro interval (h)",
+        min_value=0.0, max_value=168.0, step=0.5,
+        value=round(st.session_state.min_intro_interval_min / 60, 2),
+        format="%.1f",
+        help="Minimum hours between consecutive patient introductions. 0 = schedule as fast as resources allow.",
+    )
+    st.session_state.min_intro_interval_min = int(intro_h * 60)
     st.markdown("---")
     st.markdown('<div class="nav-section-label">Session</div>', unsafe_allow_html=True)
 
@@ -681,6 +690,7 @@ def _do_generate():
         st.session_state.patients,
         st.session_state.schedule_start,
         eq_efficiency=st.session_state.get("eq_efficiency", {}),
+        min_intro_interval_min=int(st.session_state.get("min_intro_interval_min", 0)),
     )
     st.session_state.schedule = batches
     st.session_state.engine  = engine
@@ -1150,6 +1160,9 @@ if PAGE == "📊 Dashboard":
         else:
             # ── Key metrics ───────────────────────────────────────────────────
             m1, m2, m3, m4, m5 = st.columns(5)
+            optimal_interval_h = (1 / tm["weekly_intake"] * 7 * 24) if tm["weekly_intake"] > 0 else 0
+            configured_h = st.session_state.get("min_intro_interval_min", 0) / 60
+
             m1.metric("Avg Cycle Time",   f"{tm['avg_cycle_days']:.1f} days")
             m2.metric(
                 "Patients / Week",
@@ -1173,6 +1186,45 @@ if PAGE == "📊 Dashboard":
             m4.metric("Theoretical Max",  f"{tm['theoretical_ppy']:.0f} pts/yr",
                       help=f"Bottleneck: {tm['bottleneck_type']} (100% utilisation, 24/7)")
             m5.metric("Schedule Span",    f"{tm['span_days']:.1f} days")
+
+            mi1, mi2, mi3 = st.columns(3)
+            mi1.metric(
+                "Optimal Intro Interval",
+                f"{optimal_interval_h:.1f} h",
+                help=(
+                    f"Minimum hours between patient introductions to fully utilise "
+                    f"the incubator capacity ({tm['n_incubators']} incubators × "
+                    f"{tm['avg_inc_wall_days']:.1f} day occupancy). "
+                    f"Introducing faster than this creates a queue."
+                ),
+            )
+            delta_h = configured_h - optimal_interval_h if configured_h > 0 else None
+            mi2.metric(
+                "Configured Interval",
+                f"{configured_h:.1f} h" if configured_h > 0 else "Auto",
+                delta=f"{delta_h:+.1f} h vs optimal" if delta_h is not None else None,
+                delta_color="inverse",
+                help="Set via 'Min intro interval' in the sidebar. 0 = engine decides.",
+            )
+            # Actual interval from the generated schedule
+            tsa_starts = sorted(
+                b.scheduled_start for b in st.session_state.schedule
+                if b.phase_name == self.process_sequence[0]["phase"]
+                if hasattr(self, "process_sequence")
+            ) if False else sorted(
+                b.scheduled_start for b in st.session_state.schedule
+                if b.step_index == 0
+            )
+            if len(tsa_starts) >= 2:
+                gaps = [(tsa_starts[i+1] - tsa_starts[i]).total_seconds()/3600 for i in range(len(tsa_starts)-1)]
+                avg_actual_h = sum(gaps) / len(gaps)
+                mi3.metric(
+                    "Actual Avg Interval",
+                    f"{avg_actual_h:.1f} h",
+                    help="Average gap between consecutive patient introductions in the current schedule.",
+                )
+            else:
+                mi3.metric("Actual Avg Interval", "N/A", help="Need ≥2 patients.")
 
             st.info(
                 f"**Incubator constraint:** {tm['n_incubators']} incubators → max "

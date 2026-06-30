@@ -311,6 +311,7 @@ class SchedulingEngine:
         patients: List[Patient],
         schedule_start: datetime,
         eq_efficiency: Optional[Dict[str, float]] = None,
+        min_intro_interval_min: int = 0,
     ) -> List[ScheduledBatch]:
         eff = eq_efficiency or {}
 
@@ -353,10 +354,15 @@ class SchedulingEngine:
         # work around them").
         #
         intro_plan: Dict[str, Tuple] = {}   # patient_id → (incubator, romag_eq, start, end)
+        last_intro_start: Optional[datetime] = None
         for patient in sorted_patients:
+            earliest_intro = schedule_start
+            if min_intro_interval_min > 0 and last_intro_start is not None:
+                earliest_intro = max(schedule_start, last_intro_start + timedelta(minutes=min_intro_interval_min))
             inc, romag_eq, start = self._joint_tsa_start(
-                patient, eq_cal, robot_cals, assigned_incubators, schedule_start, tsa_step
+                patient, eq_cal, robot_cals, assigned_incubators, earliest_intro, tsa_step
             )
+            last_intro_start = start
             end = start + timedelta(minutes=tsa_eff_dur)
             assigned_incubators[patient.patient_id] = inc.equipment_id
             patient.incubator_id = inc.equipment_id
