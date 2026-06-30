@@ -359,11 +359,18 @@ def _check_password() -> bool:
     pwd = st.text_input("Password", type="password", placeholder="Enter access password")
     if st.button("Sign In", type="primary", use_container_width=True):
         try:
-            expected = st.secrets.get("APP_PASSWORD", "Scheduler")
+            admin_pwd  = st.secrets.get("APP_PASSWORD",        "Scheduler")
+            viewer_pwd = st.secrets.get("VIEWER_PASSWORD",     "SchedulerView")
         except Exception:
-            expected = "Scheduler"
-        if pwd == expected:
+            admin_pwd  = "Scheduler"
+            viewer_pwd = "SchedulerView"
+        if pwd == admin_pwd:
             st.session_state.authenticated = True
+            st.session_state.role = "admin"
+            st.rerun()
+        elif pwd == viewer_pwd:
+            st.session_state.authenticated = True
+            st.session_state.role = "viewer"
             st.rerun()
         else:
             st.error("Incorrect password.")
@@ -371,6 +378,9 @@ def _check_password() -> bool:
 
 if not _check_password():
     st.stop()
+
+# Convenience helper used throughout the page code
+_is_admin = st.session_state.get("role", "admin") == "admin"
 
 # ── Equipment type options ──────────────────────────────────────────────────────
 EQ_TYPE_OPTIONS = [e.value for e in EquipmentType]
@@ -461,18 +471,23 @@ with st.sidebar:
     )
 
     st.markdown('<div class="nav-section-label">Navigation</div>', unsafe_allow_html=True)
+    _all_pages = [
+        "📊 Dashboard",
+        "👥 Patient Orders",
+        "📅 Generate Schedule",
+        "🔍 Monitor Batches",
+        "⏱️ Simulation",
+        "⚙️ Master Data",
+    ]
+    _viewer_pages = ["📊 Dashboard", "🔍 Monitor Batches"]
+    _nav_pages = _all_pages if _is_admin else _viewer_pages
     PAGE = st.radio(
         "nav",
-        [
-            "📊 Dashboard",
-            "👥 Patient Orders",
-            "📅 Generate Schedule",
-            "🔍 Monitor Batches",
-            "⏱️ Simulation",
-            "⚙️ Master Data",
-        ],
+        _nav_pages,
         label_visibility="collapsed",
     )
+    if not _is_admin:
+        st.caption("👁 View-only access")
     st.markdown("---")
 
     st.markdown('<div class="nav-section-label">Live Status</div>', unsafe_allow_html=True)
