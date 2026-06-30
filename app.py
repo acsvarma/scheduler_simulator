@@ -1396,6 +1396,110 @@ if PAGE == "📊 Dashboard":
                 ]
                 st.dataframe(pd.DataFrame(eff_rows), use_container_width=True, hide_index=True)
 
+            # ── Robot Timeline — busy vs idle with introduction markers ───────
+            st.markdown("---")
+            st.markdown("**Robot Availability Timeline**")
+            st.caption(
+                "Busy windows per robot (colored bars). "
+                "Gaps = robot is free. "
+                "▼ markers = patient introductions (UP_TSA). "
+                "Introductions landing on or near a busy window explain why utilisation "
+                "looks low overall yet the robot still causes delays."
+            )
+            _robot_tl_rows = []
+            for b in batches:
+                for rs, re, seg_name, rtype in b.robot_windows:
+                    _robot_tl_rows.append({
+                        "Robot":    rtype,
+                        "Start":    rs,
+                        "End":      re,
+                        "Patient":  b.patient_id,
+                        "Phase":    b.phase_label,
+                        "Segment":  seg_name,
+                        "Duration": f"{int((re-rs).total_seconds()/60)} min",
+                    })
+            if _robot_tl_rows:
+                _tl_df = pd.DataFrame(_robot_tl_rows)
+                _tl_fig = px.timeline(
+                    _tl_df, x_start="Start", x_end="End", y="Robot",
+                    color="Patient",
+                    hover_data=["Phase", "Segment", "Duration"],
+                    height=max(200, _tl_df["Robot"].nunique() * 70 + 80),
+                )
+                _tl_fig.update_yaxes(
+                    categoryorder="array",
+                    categoryarray=sorted(_tl_df["Robot"].unique().tolist()),
+                    autorange="reversed",
+                )
+                # Mark patient introduction times as vertical lines
+                _intro_times = sorted(
+                    b.scheduled_start for b in batches if b.step_index == 0
+                )
+                for _it in _intro_times:
+                    _tl_fig.add_vline(
+                        x=_it, line_dash="dash", line_color="#BE2BBB",
+                        line_width=1, opacity=0.7,
+                    )
+                # Add annotation arrows at the top for introductions
+                _y_top = sorted(_tl_df["Robot"].unique().tolist())[0]
+                for _i, _it in enumerate(_intro_times):
+                    _tl_fig.add_annotation(
+                        x=_it, y=_y_top, text=f"▼",
+                        showarrow=False, yanchor="bottom",
+                        font=dict(color="#BE2BBB", size=10),
+                        yshift=30,
+                    )
+                _tl_fig.update_layout(
+                    margin=dict(l=10, r=10, t=30, b=10),
+                    paper_bgcolor="white", plot_bgcolor="white",
+                    font=dict(family='"Trebuchet MS", Arial', size=11),
+                    xaxis=dict(gridcolor="#F0F0F0"),
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                )
+                st.plotly_chart(_tl_fig, use_container_width=True)
+
+                # Idle window table — show explicit free windows per robot
+                st.markdown("**Idle Windows (robot free ≥ 15 min)**")
+                _idle_rows = []
+                for _rtype in sorted(_tl_df["Robot"].unique()):
+                    _windows = sorted(
+                        [(r["Start"], r["End"]) for _, r in _tl_df[_tl_df["Robot"] == _rtype].iterrows()],
+                        key=lambda w: w[0],
+                    )
+                    _sched_start = min(b.scheduled_start for b in batches)
+                    _sched_end   = max(b.scheduled_end   for b in batches)
+                    # Check gap before first window
+                    if _windows and (_windows[0][0] - _sched_start).total_seconds() / 60 >= 15:
+                        _idle_rows.append({
+                            "Robot": _rtype,
+                            "Idle From": _sched_start.strftime("%m/%d %H:%M"),
+                            "Idle To":   _windows[0][0].strftime("%m/%d %H:%M"),
+                            "Duration (min)": int((_windows[0][0] - _sched_start).total_seconds() / 60),
+                        })
+                    # Gaps between windows
+                    for _j in range(len(_windows) - 1):
+                        _gap_min = int((_windows[_j+1][0] - _windows[_j][1]).total_seconds() / 60)
+                        if _gap_min >= 15:
+                            _idle_rows.append({
+                                "Robot": _rtype,
+                                "Idle From": _windows[_j][1].strftime("%m/%d %H:%M"),
+                                "Idle To":   _windows[_j+1][0].strftime("%m/%d %H:%M"),
+                                "Duration (min)": _gap_min,
+                            })
+                    # Gap after last window
+                    if _windows and (_sched_end - _windows[-1][1]).total_seconds() / 60 >= 15:
+                        _idle_rows.append({
+                            "Robot": _rtype,
+                            "Idle From": _windows[-1][1].strftime("%m/%d %H:%M"),
+                            "Idle To":   _sched_end.strftime("%m/%d %H:%M"),
+                            "Duration (min)": int((_sched_end - _windows[-1][1]).total_seconds() / 60),
+                        })
+                if _idle_rows:
+                    st.dataframe(
+                        pd.DataFrame(_idle_rows).sort_values(["Robot", "Idle From"]),
+                        use_container_width=True, hide_index=True,
+                    )
+
             # ── Maximum efficiency analysis ───────────────────────────────────
             st.markdown("---")
             st.markdown("**Maximum Efficiency — Patients / Week by Resource**")
