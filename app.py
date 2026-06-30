@@ -334,6 +334,34 @@ hr { border-color: rgba(89,84,84,0.15) !important; margin: 10px 0 !important; }
 """
 st.markdown(BMS_CSS, unsafe_allow_html=True)
 
+# ── Password gate ──────────────────────────────────────────────────────────────
+def _check_password() -> bool:
+    if st.session_state.get("authenticated"):
+        return True
+    st.markdown(
+        "<div style='max-width:360px;margin:80px auto 0;padding:32px;background:white;"
+        "border-radius:12px;box-shadow:0 4px 24px rgba(89,84,84,0.12);"
+        "border-top:4px solid #BE2BBB'>"
+        "<div style='text-align:center;margin-bottom:24px'>"
+        "<span style='font-size:2rem'>💊</span>"
+        "<h2 style='color:#BE2BBB;margin:8px 0 4px;font-size:1.2rem'>SIRIUS Scheduler</h2>"
+        "<p style='color:#A69F9F;font-size:12px;margin:0'>Bristol-Myers Squibb</p>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+    pwd = st.text_input("Password", type="password", placeholder="Enter access password")
+    if st.button("Sign In", type="primary", use_container_width=True):
+        expected = st.secrets.get("APP_PASSWORD", "sirius2025")
+        if pwd == expected:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
+    return False
+
+if not _check_password():
+    st.stop()
+
 # ── Equipment type options ──────────────────────────────────────────────────────
 EQ_TYPE_OPTIONS = [e.value for e in EquipmentType]
 EQ_TYPE_MAP = {e.value: e for e in EquipmentType}
