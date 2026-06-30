@@ -801,6 +801,17 @@ def _do_generate():
     st.session_state.schedule = batches
     st.session_state.engine  = engine
     st.session_state.sim     = SimulationEngine()
+
+    # Compute upcoming introduction windows beyond the last scheduled patient
+    last_intro = max(
+        (b.scheduled_start for b in batches if b.step_index == 0),
+        default=st.session_state.schedule_start,
+    )
+    st.session_state.intro_windows = engine.next_intro_windows(
+        n=8,
+        after_time=last_intro,
+        min_interval_min=int(st.session_state.get("min_intro_interval_min", 0)),
+    )
     _autosave()
 
 
@@ -1332,6 +1343,40 @@ if PAGE == "📊 Dashboard":
             else:
                 mi3.metric("Actual Avg Interval", "N/A", help="Need ≥2 patients.")
 
+            # ── Planned introduction windows ──────────────────────────────────
+            _iw = st.session_state.get("intro_windows", [])
+            if _iw:
+                st.markdown("---")
+                st.markdown("**Planned Introduction Windows**")
+                st.caption(
+                    "Next available slots for patient introduction based on current "
+                    "Romag + incubator availability. Assume a patient will be ready "
+                    "for each window — hand these times to logistics."
+                )
+                _iw_cols = st.columns(min(4, len(_iw)))
+                for _ci, (_col, _wt) in enumerate(zip(
+                    (_iw_cols * ((len(_iw) // len(_iw_cols)) + 1))[:len(_iw)], _iw
+                )):
+                    _col.metric(
+                        f"Slot {_ci + 1}",
+                        _wt.strftime("%m/%d %H:%M"),
+                        help=_wt.strftime("%A, %B %d %Y at %H:%M"),
+                    )
+                # Also show as table for copy/share
+                with st.expander("📋 Full window list"):
+                    st.dataframe(
+                        pd.DataFrame([{
+                            "Slot": i + 1,
+                            "Date": w.strftime("%Y-%m-%d"),
+                            "Time": w.strftime("%H:%M"),
+                            "Day":  w.strftime("%A"),
+                            "Gap from prev (h)": round(
+                                (w - _iw[i-1]).total_seconds() / 3600, 1
+                            ) if i > 0 else "—",
+                        } for i, w in enumerate(_iw)]),
+                        use_container_width=True, hide_index=True,
+                    )
+
             st.info(
                 f"**Incubator constraint:** {tm['n_incubators']} incubators → max "
                 f"**{tm['n_incubators']} concurrent patients**. "
@@ -1431,23 +1476,35 @@ if PAGE == "📊 Dashboard":
                     categoryarray=sorted(_tl_df["Robot"].unique().tolist()),
                     autorange="reversed",
                 )
-                # Mark patient introduction times as vertical lines
+                # Scheduled introductions — purple dashed
                 _intro_times = sorted(
                     b.scheduled_start for b in batches if b.step_index == 0
                 )
                 for _it in _intro_times:
                     _tl_fig.add_vline(
                         x=_it, line_dash="dash", line_color="#BE2BBB",
-                        line_width=1, opacity=0.7,
+                        line_width=1, opacity=0.8,
                     )
-                # Add annotation arrows at the top for introductions
+                # Planned future windows — green solid
+                _iw_tl = st.session_state.get("intro_windows", [])
+                for _fw in _iw_tl:
+                    _tl_fig.add_vline(
+                        x=_fw, line_dash="dot", line_color="#27ae60",
+                        line_width=1.5, opacity=0.9,
+                    )
+                # Legend annotations at top
                 _y_top = sorted(_tl_df["Robot"].unique().tolist())[0]
                 for _i, _it in enumerate(_intro_times):
                     _tl_fig.add_annotation(
-                        x=_it, y=_y_top, text=f"▼",
+                        x=_it, y=_y_top, text="▼",
                         showarrow=False, yanchor="bottom",
-                        font=dict(color="#BE2BBB", size=10),
-                        yshift=30,
+                        font=dict(color="#BE2BBB", size=10), yshift=30,
+                    )
+                for _fw in _iw_tl:
+                    _tl_fig.add_annotation(
+                        x=_fw, y=_y_top, text="▽",
+                        showarrow=False, yanchor="bottom",
+                        font=dict(color="#27ae60", size=10), yshift=30,
                     )
                 _tl_fig.update_layout(
                     margin=dict(l=10, r=10, t=30, b=10),

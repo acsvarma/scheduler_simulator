@@ -509,7 +509,60 @@ class SchedulingEngine:
 
             patient.status = "Scheduled"
 
+        # ── Store calendar state for next_intro_windows() ────────────────────
+        self._eq_cal             = eq_cal
+        self._robot_cals         = robot_cals
+        self._assigned_incubators = assigned_incubators
+
         return all_batches
+
+    # ── Next available introduction windows ────────────────────────────────────
+
+    def next_intro_windows(
+        self,
+        n: int = 8,
+        after_time: Optional[datetime] = None,
+        min_interval_min: int = 0,
+    ) -> List[datetime]:
+        """
+        Project the next N patient introduction windows beyond the current schedule.
+        Uses the calendar state saved by the last call to schedule().
+        Returns a list of datetime objects (TSA start times).
+        """
+        import copy as _copy
+        if not hasattr(self, "_eq_cal"):
+            return []
+
+        eq_cal_w     = _copy.deepcopy(self._eq_cal)
+        robot_cals_w = _copy.deepcopy(self._robot_cals)
+        assigned_w   = dict(self._assigned_incubators)
+
+        tsa_step = self.process_sequence[0]
+        tsa_dur  = tsa_step["duration_min"]
+
+        windows: List[datetime] = []
+        earliest = after_time or datetime.now()
+
+        for i in range(n):
+            if min_interval_min > 0 and windows:
+                earliest = max(earliest, windows[-1] + timedelta(minutes=min_interval_min))
+
+            from .models import Patient as _Patient
+            dummy = _Patient(f"__SLOT_{i}", i + 9000, "")
+            result = self._joint_tsa_start(dummy, eq_cal_w, robot_cals_w, assigned_w, earliest, tsa_step)
+            if result is None:
+                break
+            inc, romag_eq, start = result
+
+            end = start + timedelta(minutes=tsa_dur)
+            self._book(romag_eq, eq_cal_w, start, end)
+            self._book_robot(robot_cals_w, start, tsa_step)
+            assigned_w[dummy.patient_id] = inc.equipment_id
+
+            windows.append(start)
+            earliest = start
+
+        return windows
 
     # ── Reschedule on delay ────────────────────────────────────────────────────
 
