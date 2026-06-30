@@ -1,0 +1,736 @@
+{
+  "version": 1,
+  "sequences": {
+    "Default CAR-T": [
+      {
+        "step": 0,
+        "phase": "UP_TSA",
+        "phase_label": "UP_TSA",
+        "phase_key": "UP_TSA",
+        "equipment_type": "Romag",
+        "duration_min": 240,
+        "segments": [
+          {
+            "name": "Seg 1 \u2013 Cell Labelling",
+            "duration_min": 50,
+            "robot_types": [
+              "Romag Robot"
+            ],
+            "robot_duration_min": 5,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seg 2 \u2013 Incubation",
+            "duration_min": 40,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seg 3 \u2013 Wash",
+            "duration_min": 50,
+            "robot_types": [
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 3,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seg 4 \u2013 Resuspension",
+            "duration_min": 50,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seg 5 \u2013 Transfer",
+            "duration_min": 50,
+            "robot_types": [
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 10,
+            "max_duration_min": 0,
+            "overlap_next_step": true
+          }
+        ]
+      },
+      {
+        "step": 1,
+        "phase": "UP_INC_1",
+        "phase_label": "UP_INC (1st)",
+        "phase_key": "UP_INC",
+        "equipment_type": "Incubator",
+        "duration_min": 2880,
+        "min_duration_min": 120,
+        "max_duration_min": 4320,
+        "segments": [
+          {
+            "name": "STR Transfer",
+            "duration_min": 15,
+            "robot_types": [
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 15,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Min Incubation Time",
+            "duration_min": 105,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Incubation",
+            "duration_min": 2760,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 4200,
+            "overlap_next_step": false
+          }
+        ]
+      },
+      {
+        "step": 2,
+        "phase": "UP_BSD_1",
+        "phase_label": "UP_BSD (1st)",
+        "phase_key": "UP_BSD",
+        "equipment_type": "BSD Sampling",
+        "duration_min": 120,
+        "segments": [
+          {
+            "name": "Sample Collection",
+            "duration_min": 60,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Bead Selection",
+            "duration_min": 60,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          }
+        ]
+      },
+      {
+        "step": 3,
+        "phase": "UP_INC_2",
+        "phase_label": "UP_INC (2nd)",
+        "phase_key": "UP_INC",
+        "equipment_type": "Incubator",
+        "duration_min": 1440,
+        "min_duration_min": 120,
+        "max_duration_min": 2880,
+        "segments": [
+          {
+            "name": "STR Transfer",
+            "duration_min": 15,
+            "robot_types": [
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 15,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Min Incubation Time",
+            "duration_min": 105,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Incubation",
+            "duration_min": 1320,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 2760,
+            "overlap_next_step": false
+          }
+        ]
+      },
+      {
+        "step": 4,
+        "phase": "UP_TxD",
+        "phase_label": "UP_TxD",
+        "phase_key": "UP_TxD",
+        "equipment_type": "Romag",
+        "duration_min": 360,
+        "segments": [
+          {
+            "name": "Seg 1 \u2013 Transduction Prep",
+            "duration_min": 90,
+            "robot_types": [
+              "Romag Robot"
+            ],
+            "robot_duration_min": 5,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seg 2 \u2013 Transduction",
+            "duration_min": 90,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seg 3 \u2013 Media Exchange",
+            "duration_min": 90,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seg 4 \u2013 Post-Transduction",
+            "duration_min": 90,
+            "robot_types": [
+              "Romag Robot"
+            ],
+            "robot_duration_min": 5,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          }
+        ]
+      },
+      {
+        "step": 5,
+        "phase": "UP_INC_3",
+        "phase_label": "UP_INC (3rd)",
+        "phase_key": "UP_INC",
+        "equipment_type": "Incubator",
+        "duration_min": 2880,
+        "min_duration_min": 120,
+        "max_duration_min": 5760,
+        "segments": [
+          {
+            "name": "STR Transfer",
+            "duration_min": 15,
+            "robot_types": [
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 15,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Min Incubation Time",
+            "duration_min": 105,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Incubation",
+            "duration_min": 2760,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 5640,
+            "overlap_next_step": false
+          }
+        ]
+      },
+      {
+        "step": 6,
+        "phase": "UP_BSD_2",
+        "phase_label": "UP_BSD (2nd)",
+        "phase_key": "UP_BSD",
+        "equipment_type": "BSD Sampling",
+        "duration_min": 120,
+        "segments": [
+          {
+            "name": "Sample Collection",
+            "duration_min": 60,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Bead Selection",
+            "duration_min": 60,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          }
+        ]
+      },
+      {
+        "step": 7,
+        "phase": "UP_INC_4",
+        "phase_label": "UP_INC (4th)",
+        "phase_key": "UP_INC",
+        "equipment_type": "Incubator",
+        "duration_min": 1440,
+        "min_duration_min": 120,
+        "max_duration_min": 2880,
+        "segments": [
+          {
+            "name": "STR Transfer",
+            "duration_min": 15,
+            "robot_types": [
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 15,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Min Incubation Time",
+            "duration_min": 105,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Incubation",
+            "duration_min": 1320,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 2760,
+            "overlap_next_step": false
+          }
+        ]
+      },
+      {
+        "step": 8,
+        "phase": "UP_DHWF",
+        "phase_label": "UP_DHWF",
+        "phase_key": "UP_DHWF",
+        "equipment_type": "Romag",
+        "duration_min": 480,
+        "chain_to_next": true,
+        "segments": [
+          {
+            "name": "Seg 1 \u2013 Harvest Prep",
+            "duration_min": 96,
+            "robot_types": [
+              "Romag Robot"
+            ],
+            "robot_duration_min": 5,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seg 2 \u2013 Cell Harvest",
+            "duration_min": 96,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seg 3 \u2013 Wash",
+            "duration_min": 96,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seg 4 \u2013 Formulation",
+            "duration_min": 96,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seg 5 \u2013 Final Transfer",
+            "duration_min": 96,
+            "robot_types": [
+              "Incubation Robot"
+            ],
+            "robot_duration_min": 5,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          }
+        ]
+      },
+      {
+        "step": 9,
+        "phase": "UP_FILL",
+        "phase_label": "UP_FILL",
+        "phase_key": "UP_FILL",
+        "equipment_type": "Fill",
+        "duration_min": 180,
+        "segments": [
+          {
+            "name": "Fill Setup",
+            "duration_min": 30,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Filling",
+            "duration_min": 120,
+            "robot_types": [
+              "Fill Robot"
+            ],
+            "robot_duration_min": 120,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          },
+          {
+            "name": "Seal & Label",
+            "duration_min": 30,
+            "robot_types": [],
+            "robot_duration_min": 0,
+            "max_duration_min": 0,
+            "overlap_next_step": false
+          }
+        ]
+      }
+    ]
+  },
+  "equipment": [
+    {
+      "equipment_id": "ROMAG_1",
+      "equipment_type": "Romag",
+      "display_name": "Romag 1",
+      "is_available": true
+    },
+    {
+      "equipment_id": "ROMAG_2",
+      "equipment_type": "Romag",
+      "display_name": "Romag 2",
+      "is_available": true
+    },
+    {
+      "equipment_id": "ROMAG_3",
+      "equipment_type": "Romag",
+      "display_name": "Romag 3",
+      "is_available": true
+    },
+    {
+      "equipment_id": "FILL_1",
+      "equipment_type": "Fill",
+      "display_name": "Fill Station",
+      "is_available": true
+    },
+    {
+      "equipment_id": "BSD_SAMP_1",
+      "equipment_type": "BSD Sampling",
+      "display_name": "BSD Sampling",
+      "is_available": true
+    },
+    {
+      "equipment_id": "BSD_WEIGH_1",
+      "equipment_type": "BSD Weighing",
+      "display_name": "BSD Weighing",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_01",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 01",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_02",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 02",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_03",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 03",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_04",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 04",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_05",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 05",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_06",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 06",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_07",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 07",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_08",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 08",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_09",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 09",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_10",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 10",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_11",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 11",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_12",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 12",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_13",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 13",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_14",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 14",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_15",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 15",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_16",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 16",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_17",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 17",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_18",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 18",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_19",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 19",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_20",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 20",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_21",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 21",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_22",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 22",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_23",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 23",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_24",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 24",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_25",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 25",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_26",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 26",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_27",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 27",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_28",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 28",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_29",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 29",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_30",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 30",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_31",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 31",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_32",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 32",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_33",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 33",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_34",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 34",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_35",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 35",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_36",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 36",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_37",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 37",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_38",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 38",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_39",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 39",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_40",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 40",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_41",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 41",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_42",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 42",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_43",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 43",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_44",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 44",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_45",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 45",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_46",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 46",
+      "is_available": true
+    },
+    {
+      "equipment_id": "INC_47",
+      "equipment_type": "Incubator",
+      "display_name": "Incubator 47",
+      "is_available": true
+    }
+  ],
+  "eq_efficiency": {
+    "Romag": 100,
+    "Incubator": 100,
+    "BSD Sampling": 100,
+    "BSD Weighing": 100,
+    "Fill": 100
+  },
+  "reschedule_threshold_min": 0,
+  "auto_start_grace_min": 0,
+  "min_intro_interval_min": 0,
+  "inc4_to_dhwf_max_h": 6.0,
+  "fill_gap_max_h": 1.0
+}

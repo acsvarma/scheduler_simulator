@@ -3,3 +3,4 @@ __pycache__/
 *.pptx
 *.log
 scheduler_session.json
+# scheduler_defaults.json is intentionally tracked — it is the persistent master data

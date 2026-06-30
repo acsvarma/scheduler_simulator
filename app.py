@@ -469,13 +469,26 @@ for k, v in _DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ── Auto-load from disk on first render ───────────────────────────────────────
+# ── Auto-load on first render ─────────────────────────────────────────────────
+# Priority: ephemeral session file > committed defaults file > hardcoded Python defaults
+_DEFAULTS_FILE = Path("scheduler_defaults.json")
+
 if "initialized" not in st.session_state:
     st.session_state.initialized = True
+    # 1. Try ephemeral session (patients + schedule + master data)
     loaded = load_from_file(SESSION_FILE)
     if loaded:
         for k, v in loaded.items():
             st.session_state[k] = v
+    else:
+        # 2. Fall back to committed defaults (master data only — no patients/schedule)
+        loaded_defaults = load_from_file(_DEFAULTS_FILE)
+        if loaded_defaults:
+            for k in ("sequences", "equipment", "eq_efficiency",
+                      "reschedule_threshold_min", "auto_start_grace_min",
+                      "min_intro_interval_min", "inc4_to_dhwf_max_h", "fill_gap_max_h"):
+                if k in loaded_defaults:
+                    st.session_state[k] = loaded_defaults[k]
 
 # Ensure active sequence still exists after session reload
 if st.session_state.active_sequence not in st.session_state.sequences:
@@ -580,6 +593,33 @@ with st.sidebar:
         if st.button("🚪 Kick all users", use_container_width=True, help="Force all currently logged-in users to re-authenticate."):
             _kick_all()
             st.success("All sessions kicked — users will be logged out on their next action.")
+        if st.button("💾 Save master data as default", use_container_width=True,
+                     help="Persist current sequences, equipment and scheduling parameters to the default config file. Survives app reboots."):
+            try:
+                from scheduler.session_io import _ser_sequence as _ss
+                _defaults_data = {
+                    "version": 1,
+                    "sequences": {
+                        name: _ss(seq)
+                        for name, seq in st.session_state.sequences.items()
+                    },
+                    "equipment": [
+                        {"equipment_id": e.equipment_id, "equipment_type": e.equipment_type.value,
+                         "display_name": e.display_name, "is_available": e.is_available}
+                        for e in st.session_state.equipment
+                    ],
+                    "eq_efficiency":             st.session_state.get("eq_efficiency", {}),
+                    "reschedule_threshold_min":  st.session_state.get("reschedule_threshold_min", 0),
+                    "auto_start_grace_min":      st.session_state.get("auto_start_grace_min", 0),
+                    "min_intro_interval_min":    st.session_state.get("min_intro_interval_min", 0),
+                    "inc4_to_dhwf_max_h":        st.session_state.get("inc4_to_dhwf_max_h", 6.0),
+                    "fill_gap_max_h":            st.session_state.get("fill_gap_max_h", 1.0),
+                }
+                import json as _json
+                _DEFAULTS_FILE.write_text(_json.dumps(_defaults_data, indent=2), encoding="utf-8")
+                st.success("Default config saved. It will survive reboots on this server.")
+            except Exception as _e:
+                st.error(f"Save failed: {_e}")
 
     st.markdown('<div class="nav-section-label">Session</div>', unsafe_allow_html=True)
 
