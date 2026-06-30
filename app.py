@@ -341,6 +341,21 @@ hr { border-color: rgba(89,84,84,0.15) !important; margin: 10px 0 !important; }
 """
 st.markdown(BMS_CSS, unsafe_allow_html=True)
 
+# ── Session kick mechanism ─────────────────────────────────────────────────────
+_KICK_FILE = Path(".streamlit/kick_time.txt")
+
+def _get_kick_time() -> float:
+    try:
+        return float(_KICK_FILE.read_text().strip())
+    except Exception:
+        return 0.0
+
+def _kick_all():
+    try:
+        _KICK_FILE.write_text(str(datetime.now().timestamp()))
+    except Exception:
+        pass
+
 # ── Password gate ──────────────────────────────────────────────────────────────
 def _check_password() -> bool:
     if st.session_state.get("authenticated"):
@@ -367,10 +382,12 @@ def _check_password() -> bool:
         if pwd == admin_pwd:
             st.session_state.authenticated = True
             st.session_state.role = "admin"
+            st.session_state.login_time = datetime.now().timestamp()
             st.rerun()
         elif pwd == viewer_pwd:
             st.session_state.authenticated = True
             st.session_state.role = "viewer"
+            st.session_state.login_time = datetime.now().timestamp()
             st.rerun()
         else:
             st.error("Incorrect password.")
@@ -378,6 +395,12 @@ def _check_password() -> bool:
 
 if not _check_password():
     st.stop()
+
+# Kick check — if admin has kicked all sessions, log out anyone who logged in before the kick
+if st.session_state.get("login_time", 0) < _get_kick_time():
+    for k in ["authenticated", "role", "login_time"]:
+        st.session_state.pop(k, None)
+    st.rerun()
 
 # Convenience helper used throughout the page code
 _is_admin = st.session_state.get("role", "admin") == "admin"
@@ -531,6 +554,13 @@ with st.sidebar:
     )
     st.session_state.min_intro_interval_min = int(intro_h * 60)
     st.markdown("---")
+    if _is_admin:
+        st.markdown("---")
+        st.markdown('<div class="nav-section-label">Admin</div>', unsafe_allow_html=True)
+        if st.button("🚪 Kick all users", use_container_width=True, help="Force all currently logged-in users to re-authenticate."):
+            _kick_all()
+            st.success("All sessions kicked — users will be logged out on their next action.")
+
     st.markdown('<div class="nav-section-label">Session</div>', unsafe_allow_html=True)
 
     # Download current session as a shareable file
@@ -1149,7 +1179,7 @@ if PAGE == "📊 Dashboard":
             label_visibility="collapsed",
         )
     with ctrl_r:
-        show_segs = st.toggle("Show segments", key="gantt_show_segments", value=False)
+        show_segs = st.toggle("Show segments", key="gantt_show_segments", value=False, disabled=not _is_admin, help="Admin only — segment view is compute-intensive.")
     xrange = [g_start, g_end]
 
     with tab_eq:
