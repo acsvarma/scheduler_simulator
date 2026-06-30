@@ -303,18 +303,19 @@ class SchedulingEngine:
             all_incs   = [e for e in self._eq_by_type.get(EquipmentType.INCUBATOR, []) if e.is_available]
             candidates = [e for e in all_incs if e.equipment_id not in taken]
 
+        # For >47 patients the chosen incubator is already in use.  We store its
+        # estimated free time here so eff_t is set correctly below.  Phase A does
+        # NOT book incubators in eq_cal, so eq_cal.get() would return [] and
+        # inc_free would default to `earliest` — causing TSA to be scheduled
+        # before the incubator is free and creating a large TSA→INC_1 gap in Phase B.
+        _recycled_inc_free: Optional[datetime] = None
+
         if not candidates:
-            # All incubators assigned — pick the one that will free up soonest.
-            # Phase A only books Romag (not incubators), so eq_cal has no incubator
-            # entries yet.  Fall back to assignment-order as a proxy: the incubator
-            # assigned to the earliest-introduced patient frees first (same cycle time).
             all_incs = [e for e in self._eq_by_type.get(EquipmentType.INCUBATOR, []) if e.is_available]
             if not all_incs:
                 raise RuntimeError(f"No incubator available for patient {patient.patient_id}")
-            # Build free-time estimate: eq_cal booking end if known, else assignment order
+
             inc_order = {inc_id: i for i, inc_id in enumerate(assigned_incubators.values())}
-            # Estimate time-to-DHWF from process sequence so we push patient intro
-            # to after the incubator will actually be free
             dhwf_idx = next(
                 (i for i, s in enumerate(self.process_sequence) if s.get("phase") == "UP_DHWF"), -1
             )
@@ -326,15 +327,23 @@ class SchedulingEngine:
                 slots = eq_cal.get(inc_eq.equipment_id, [])
                 if slots:
                     return max(s[1] for s in slots)
+                # Use (order+1) so order=0 estimates ~1 occupancy cycle from earliest,
+                # not 0 (which incorrectly returns `earliest` for the first-assigned inc)
                 order = inc_order.get(inc_eq.equipment_id, 9999)
-                return earliest + timedelta(minutes=order * est_occupancy)
+                return earliest + timedelta(minutes=(order + 1) * est_occupancy)
 
-            candidates = [min(all_incs, key=_est_free)]
+            best_recycled = min(all_incs, key=_est_free)
+            candidates = [best_recycled]
+            _recycled_inc_free = _est_free(best_recycled)
 
         best: Optional[Tuple] = None   # (incubator, romag_eq, start_dt)
         for inc in candidates:
-            slots    = eq_cal.get(inc.equipment_id, [])
-            inc_free = max((s[1] for s in slots), default=earliest)
+            if _recycled_inc_free is not None:
+                # >47 case: use the estimated free time, not eq_cal (which is empty for incubators in Phase A)
+                inc_free = _recycled_inc_free
+            else:
+                slots    = eq_cal.get(inc.equipment_id, [])
+                inc_free = max((s[1] for s in slots), default=earliest)
             eff_t    = max(earliest, inc_free)
             eq, start = self._best_romag(eq_cal, robot_cals, eff_t, tsa_step)
             if best is None or start < best[2]:
