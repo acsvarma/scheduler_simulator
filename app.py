@@ -462,6 +462,7 @@ _DEFAULTS = {
     "min_intro_interval_min": 0,     # 0 = as fast as possible
     "inc4_to_dhwf_max_h": 6.0,      # hours from INC(4th) min complete → DHWF start (0 = no limit)
     "fill_gap_max_h": 1.0,           # hours from DHWF end → FILL complete (0 = no limit)
+    "material_lead_h": 2.0,          # hours before process start that material must be loaded
     "live_mode": False,              # drive status from system clock automatically
     "_live_auto_batches": set(),     # batch IDs already auto-rescheduled in live mode
 }
@@ -486,7 +487,8 @@ if "initialized" not in st.session_state:
         if loaded_defaults:
             for k in ("sequences", "equipment", "eq_efficiency",
                       "reschedule_threshold_min", "auto_start_grace_min",
-                      "min_intro_interval_min", "inc4_to_dhwf_max_h", "fill_gap_max_h"):
+                      "min_intro_interval_min", "inc4_to_dhwf_max_h", "fill_gap_max_h",
+                      "material_lead_h"):
                 if k in loaded_defaults:
                     st.session_state[k] = loaded_defaults[k]
 
@@ -586,6 +588,15 @@ with st.sidebar:
         help="Max hours from DHWF end to FILL step completion. 0 = no limit.",
     )
     st.session_state.fill_gap_max_h = fill_gap_h
+
+    material_lead_h = st.number_input(
+        "Material load lead time (h)",
+        min_value=0.0, max_value=24.0, step=0.5,
+        value=float(st.session_state.get("material_lead_h", 2.0)),
+        format="%.1f",
+        help="Hours before process start that material must be loaded. Shown as 'Material Ready By' on introduction windows. No scheduling effect — logistics owns this.",
+    )
+    st.session_state.material_lead_h = material_lead_h
     st.markdown("---")
     if _is_admin:
         st.markdown("---")
@@ -614,6 +625,7 @@ with st.sidebar:
                     "min_intro_interval_min":    st.session_state.get("min_intro_interval_min", 0),
                     "inc4_to_dhwf_max_h":        st.session_state.get("inc4_to_dhwf_max_h", 6.0),
                     "fill_gap_max_h":            st.session_state.get("fill_gap_max_h", 1.0),
+                    "material_lead_h":           st.session_state.get("material_lead_h", 2.0),
                 }
                 import json as _json
                 _DEFAULTS_FILE.write_text(_json.dumps(_defaults_data, indent=2), encoding="utf-8")
@@ -1385,30 +1397,33 @@ if PAGE == "📊 Dashboard":
 
             # ── Planned introduction windows ──────────────────────────────────
             _iw = st.session_state.get("intro_windows", [])
+            _mat_lead_h = float(st.session_state.get("material_lead_h", 2.0))
             if _iw:
                 st.markdown("---")
                 st.markdown("**Planned Introduction Windows**")
                 st.caption(
-                    "Next available slots for patient introduction based on current "
-                    "Romag + incubator availability. Assume a patient will be ready "
-                    "for each window — hand these times to logistics."
+                    f"Next available slots based on Romag + incubator availability. "
+                    f"**Material Ready By** = process start − {_mat_lead_h:.1f}h — "
+                    f"hand these times to logistics."
                 )
                 _iw_cols = st.columns(min(4, len(_iw)))
                 for _ci, (_col, _wt) in enumerate(zip(
                     (_iw_cols * ((len(_iw) // len(_iw_cols)) + 1))[:len(_iw)], _iw
                 )):
+                    _mat_t = _wt - timedelta(hours=_mat_lead_h)
                     _col.metric(
-                        f"Slot {_ci + 1}",
+                        f"Slot {_ci + 1}  ·  Process start",
                         _wt.strftime("%m/%d %H:%M"),
                         help=_wt.strftime("%A, %B %d %Y at %H:%M"),
                     )
+                    _col.caption(f"📦 Load by {_mat_t.strftime('%m/%d %H:%M')}")
                 # Also show as table for copy/share
                 with st.expander("📋 Full window list"):
                     st.dataframe(
                         pd.DataFrame([{
                             "Slot": i + 1,
-                            "Date": w.strftime("%Y-%m-%d"),
-                            "Time": w.strftime("%H:%M"),
+                            "Process Start": w.strftime("%Y-%m-%d %H:%M"),
+                            "Material Ready By": (w - timedelta(hours=_mat_lead_h)).strftime("%Y-%m-%d %H:%M"),
                             "Day":  w.strftime("%A"),
                             "Gap from prev (h)": round(
                                 (w - _iw[i-1]).total_seconds() / 3600, 1
@@ -2063,10 +2078,15 @@ elif PAGE == "📅 Generate Schedule":
                          if b.patient_id == _sp.patient_id and b.step_index == 0),
                         None,
                     )
-                    _lbl = (
-                        f"{_sp.patient_id}  —  intro {_intro_t.strftime('%m/%d %H:%M')}"
-                        if _intro_t else _sp.patient_id
-                    )
+                    _mat_lead_assign = float(st.session_state.get("material_lead_h", 2.0))
+                    if _intro_t:
+                        _mat_t_assign = _intro_t - timedelta(hours=_mat_lead_assign)
+                        _lbl = (
+                            f"{_sp.patient_id}  —  process {_intro_t.strftime('%m/%d %H:%M')} "
+                            f"· load by {_mat_t_assign.strftime('%m/%d %H:%M')}"
+                        )
+                    else:
+                        _lbl = _sp.patient_id
                     _real_id = st.text_input(
                         _lbl, value="", placeholder="Real patient ID",
                         key=f"assign_{_sp.patient_id}",
@@ -2138,11 +2158,13 @@ elif PAGE == "📅 Generate Schedule":
             st.plotly_chart(fig, use_container_width=True)
 
             # Introduction window summary table
+            _mat_lead_gs = float(st.session_state.get("material_lead_h", 2.0))
             _tsa_rows = [
                 {
                     "Slot / Patient": b.patient_id,
                     "Type": "Placeholder" if b.patient_id.startswith("SLOT-") else "Real",
-                    "Introduction": b.scheduled_start.strftime("%Y-%m-%d %H:%M"),
+                    "Process Start": b.scheduled_start.strftime("%Y-%m-%d %H:%M"),
+                    "Material Ready By": (b.scheduled_start - timedelta(hours=_mat_lead_gs)).strftime("%Y-%m-%d %H:%M"),
                     "Day": b.scheduled_start.strftime("%A"),
                 }
                 for b in sorted(st.session_state.schedule, key=lambda x: x.scheduled_start)
