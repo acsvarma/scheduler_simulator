@@ -521,7 +521,8 @@ with st.sidebar:
     )
 
     # Upload / restore a session file
-    uploaded = st.file_uploader("📂 Import session", type=["json"], label_visibility="collapsed")
+    st.caption("📂 Import session")
+    uploaded = st.file_uploader("Import session", type=["json"], label_visibility="collapsed")
     if uploaded:
         try:
             data   = json.loads(uploaded.read().decode("utf-8"))
