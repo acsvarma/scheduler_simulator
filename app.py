@@ -12,6 +12,13 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from zoneinfo import ZoneInfo
+
+_ET = ZoneInfo("America/New_York")
+
+def _now() -> datetime:
+    """Current time in US/Eastern as a naive datetime (no tzinfo)."""
+    return datetime.now(_ET).replace(tzinfo=None)
 
 from scheduler.models import Patient, Equipment, EquipmentType, ScheduledBatch, BatchStatus
 from scheduler.master_data import DEFAULT_EQUIPMENT, PROCESS_SEQUENCE, PHASE_COLORS, ROBOT_ROW_LABELS, ROBOT_TYPES_ALL
@@ -403,7 +410,7 @@ _DEFAULTS = {
     "deltav": DeltaVInterface(),
     "sim": SimulationEngine(),
     "engine": None,
-    "schedule_start": datetime.now().replace(hour=6, minute=0, second=0, microsecond=0),
+    "schedule_start": _now().replace(hour=6, minute=0, second=0, microsecond=0),
     "_seq_edit_name": "",   # name being edited in Master Data
     # ── Equipment efficiency (%) per type — 100 = ideal, lower = slower/more downtime ──
     "eq_efficiency": {
@@ -549,7 +556,7 @@ def _schedule_df() -> pd.DataFrame:
 
 
 def _new_order_id() -> str:
-    return f"ORD-{datetime.now().year}-{random.randint(1000, 9999)}"
+    return f"ORD-{_now().year}-{random.randint(1000, 9999)}"
 
 
 def _gantt(batches: List[ScheduledBatch], y_col: str, color_col: str, color_map=None, show_robot: bool = True, xaxis_range=None, show_segments: bool = False) -> go.Figure:
@@ -687,7 +694,7 @@ def _auto_clock_reschedule() -> int:
     if not st.session_state.schedule or engine is None:
         return 0
 
-    now       = datetime.now()
+    now       = _now()
     threshold = int(st.session_state.reschedule_threshold_min)
     grace     = int(st.session_state.auto_start_grace_min)
     seen      = st.session_state._live_auto_batches   # set of batch_ids already rescheduled
@@ -1590,7 +1597,7 @@ elif PAGE == "📅 Generate Schedule":
                    f"{sum(s['duration_min'] for s in active_seq_steps)%60}m")
 
         if st.button("🕐 Use current time", use_container_width=True):
-            st.session_state.schedule_start = datetime.now().replace(second=0, microsecond=0)
+            st.session_state.schedule_start = _now().replace(second=0, microsecond=0)
             st.rerun()
         s_date = st.date_input("Start date", value=st.session_state.schedule_start.date())
         s_time = st.time_input("Start time", value=st.session_state.schedule_start.time())

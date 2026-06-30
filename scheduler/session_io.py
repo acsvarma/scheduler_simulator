@@ -209,7 +209,7 @@ def load_session(data: dict) -> Dict[str, Any]:
     schedule_start = (
         datetime.fromisoformat(schedule_start_raw)
         if schedule_start_raw
-        else datetime.now().replace(hour=6, minute=0, second=0, microsecond=0)
+        else datetime.now(tz=__import__('zoneinfo').ZoneInfo("America/New_York")).replace(tzinfo=None, hour=6, minute=0, second=0, microsecond=0)
     )
 
     # Rebuild engine if there is a schedule
