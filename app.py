@@ -23,7 +23,7 @@ from scheduler.session_io import save_to_file, load_from_file, dump_session, SES
 
 # ── Page config ────────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="BMS Production Scheduler",
+    page_title="Scheduler Simulator",
     page_icon="💊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -344,7 +344,7 @@ def _check_password() -> bool:
         "border-top:4px solid #BE2BBB'>"
         "<div style='text-align:center;margin-bottom:24px'>"
         "<span style='font-size:2rem'>💊</span>"
-        "<h2 style='color:#BE2BBB;margin:8px 0 4px;font-size:1.2rem'>SIRIUS Scheduler</h2>"
+        "<h2 style='color:#BE2BBB;margin:8px 0 4px;font-size:1.2rem'>Scheduler Simulator</h2>"
         "<p style='color:#A69F9F;font-size:12px;margin:0'>Bristol-Myers Squibb</p>"
         "</div></div>",
         unsafe_allow_html=True,
@@ -444,7 +444,7 @@ with st.sidebar:
         '    <span class="bms-logo-text">BMS</span>'
         '    <span class="bms-logo-sub">Bristol-Myers Squibb</span>'
         '  </div>'
-        '  <div style="margin-left:auto"><span class="sirius-badge">SIRIUS</span></div>'
+        '  <div style="margin-left:auto"><span class="sirius-badge">SCHEDULER</span></div>'
         '</div>',
         unsafe_allow_html=True,
     )
