@@ -621,8 +621,12 @@ def _gantt(batches: List[ScheduledBatch], y_col: str, color_col: str, color_map=
     fig.update_traces(textposition="inside", insidetextanchor="middle",
                       textfont=dict(size=11, color="white"))
 
+    # Fix category order so shape y-indices reliably match the rendered row positions
+    fig.update_yaxes(categoryorder="array", categoryarray=y_order, autorange="reversed")
+
     # Draw solid black vertical lines at each segment boundary within the UP bar
     if show_segments and seg_boundaries:
+        n = len(y_order)
         for y_val, x_time in seg_boundaries:
             if y_val in y_order:
                 y_idx = y_order.index(y_val)
@@ -634,8 +638,6 @@ def _gantt(batches: List[ScheduledBatch], y_col: str, color_col: str, color_map=
                     line=dict(color="black", width=2),
                     layer="above",
                 )
-
-    fig.update_yaxes(autorange="reversed")
     xaxis_cfg = dict(gridcolor="#F0F0F0")
     if xaxis_range:
         xaxis_cfg["range"] = xaxis_range
@@ -1587,6 +1589,9 @@ elif PAGE == "📅 Generate Schedule":
                    f"Total: {sum(s['duration_min'] for s in active_seq_steps)//60}h "
                    f"{sum(s['duration_min'] for s in active_seq_steps)%60}m")
 
+        if st.button("🕐 Use current time", use_container_width=True):
+            st.session_state.schedule_start = datetime.now().replace(second=0, microsecond=0)
+            st.rerun()
         s_date = st.date_input("Start date", value=st.session_state.schedule_start.date())
         s_time = st.time_input("Start time", value=st.session_state.schedule_start.time())
         st.session_state.schedule_start = datetime.combine(s_date, s_time)
