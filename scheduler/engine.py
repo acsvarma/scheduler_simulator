@@ -216,7 +216,7 @@ class SchedulingEngine:
             # Never push DHWF past the INC4 deadline
             if dhwf_deadline is not None and start > dhwf_deadline:
                 eq, start = self._best_romag(eq_cal, robot_cals, earliest, step)
-                return eq, min(start, dhwf_deadline) if False else (eq, start)
+                return eq, start
 
             dhwf_end = start + timedelta(minutes=dur)
 
