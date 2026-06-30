@@ -285,13 +285,32 @@ class SchedulingEngine:
             candidates = [e for e in all_incs if e.equipment_id not in taken]
 
         if not candidates:
-            # All 47 incubators assigned — pick the one whose reserved window ends soonest
+            # All incubators assigned — pick the one that will free up soonest.
+            # Phase A only books Romag (not incubators), so eq_cal has no incubator
+            # entries yet.  Fall back to assignment-order as a proxy: the incubator
+            # assigned to the earliest-introduced patient frees first (same cycle time).
             all_incs = [e for e in self._eq_by_type.get(EquipmentType.INCUBATOR, []) if e.is_available]
             if not all_incs:
                 raise RuntimeError(f"No incubator available for patient {patient.patient_id}")
-            candidates = [min(all_incs, key=lambda e: max(
-                (s[1] for s in eq_cal.get(e.equipment_id, [])), default=earliest
-            ))]
+            # Build free-time estimate: eq_cal booking end if known, else assignment order
+            inc_order = {inc_id: i for i, inc_id in enumerate(assigned_incubators.values())}
+            # Estimate time-to-DHWF from process sequence so we push patient intro
+            # to after the incubator will actually be free
+            dhwf_idx = next(
+                (i for i, s in enumerate(self.process_sequence) if s.get("phase") == "UP_DHWF"), -1
+            )
+            est_occupancy = sum(
+                s["duration_min"] for s in (self.process_sequence[:dhwf_idx] if dhwf_idx >= 0 else [])
+            )
+
+            def _est_free(inc_eq: Equipment) -> datetime:
+                slots = eq_cal.get(inc_eq.equipment_id, [])
+                if slots:
+                    return max(s[1] for s in slots)
+                order = inc_order.get(inc_eq.equipment_id, 9999)
+                return earliest + timedelta(minutes=order * est_occupancy)
+
+            candidates = [min(all_incs, key=_est_free)]
 
         best: Optional[Tuple] = None   # (incubator, romag_eq, start_dt)
         for inc in candidates:

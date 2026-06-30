@@ -1961,9 +1961,9 @@ elif PAGE == "📅 Generate Schedule":
     left, right = st.columns([1, 2])
 
     with left:
+        # ── Manual schedule parameters ────────────────────────────────────────
         st.subheader("Parameters")
 
-        # Sequence selector
         seq_names = list(st.session_state.sequences.keys())
         sel_seq = st.selectbox(
             "Process Sequence",
@@ -1988,7 +1988,8 @@ elif PAGE == "📅 Generate Schedule":
         st.markdown("---")
         st.write(f"**Patients queued:** {len(st.session_state.patients)}")
         for p in sorted(st.session_state.patients, key=lambda x: x.priority):
-            st.write(f"  {p.priority}. {p.patient_id}")
+            _slot_icon = "📋" if p.patient_id.startswith("SLOT-") else "👤"
+            st.write(f"  {p.priority}. {_slot_icon} {p.patient_id}")
 
         st.markdown("---")
         if st.button("🚀 Generate Schedule", type="primary", use_container_width=True):
@@ -2006,14 +2007,155 @@ elif PAGE == "📅 Generate Schedule":
             st.download_button("📥 Export CSV",  df.to_csv(index=False), "schedule.csv",  "text/csv", use_container_width=True)
             st.download_button("📥 Export JSON", df.to_json(orient="records", indent=2), "schedule.json", "application/json", use_container_width=True)
 
+        # ── Auto-Plan Mode ────────────────────────────────────────────────────
+        st.markdown("---")
+        st.subheader("Auto-Plan Mode")
+        st.caption(
+            "Let the scheduler pick introduction windows and build a full forward plan "
+            "using placeholder slots. Replace slots with real patient IDs as they are confirmed."
+        )
+        with st.form("auto_plan_form", clear_on_submit=False):
+            ap_n = st.number_input(
+                "Slots to plan", min_value=1, max_value=100, value=10, step=1,
+                help="How many introduction slots to generate and schedule.",
+            )
+            ap_prefix = st.text_input("Slot ID prefix", value="SLOT-")
+            ap_replace = st.checkbox(
+                "Replace current patient list",
+                value=True,
+                help="If unchecked, slots are appended after existing patients.",
+            )
+            if st.form_submit_button("🗓 Plan Slots", type="primary"):
+                with st.spinner("Planning…"):
+                    _new_slots = [
+                        Patient(
+                            patient_id=f"{ap_prefix}{i+1:03d}",
+                            priority=i + 1,
+                            order_id=f"AUTO-{i+1:03d}",
+                        )
+                        for i in range(int(ap_n))
+                    ]
+                    if ap_replace:
+                        st.session_state.patients = _new_slots
+                    else:
+                        _max_pri = max((p.priority for p in st.session_state.patients), default=0)
+                        for _sp in _new_slots:
+                            _sp.priority += _max_pri
+                            st.session_state.patients.append(_sp)
+                    _do_generate()
+                st.success(f"Planned {int(ap_n)} introduction slots.")
+                st.rerun()
+
+        # ── Slot assignment panel ─────────────────────────────────────────────
+        _slot_pts = [
+            p for p in st.session_state.patients
+            if p.patient_id.startswith("SLOT-")
+        ]
+        if _slot_pts and st.session_state.schedule:
+            st.markdown("---")
+            st.subheader("Assign Patients to Slots")
+            st.caption("Enter the real patient ID to replace a placeholder slot. Leave blank to keep the slot.")
+            with st.form("assign_slots_form", clear_on_submit=True):
+                _assignments: dict = {}
+                for _sp in sorted(_slot_pts, key=lambda x: x.priority):
+                    _intro_t = next(
+                        (b.scheduled_start for b in st.session_state.schedule
+                         if b.patient_id == _sp.patient_id and b.step_index == 0),
+                        None,
+                    )
+                    _lbl = (
+                        f"{_sp.patient_id}  —  intro {_intro_t.strftime('%m/%d %H:%M')}"
+                        if _intro_t else _sp.patient_id
+                    )
+                    _real_id = st.text_input(
+                        _lbl, value="", placeholder="Real patient ID",
+                        key=f"assign_{_sp.patient_id}",
+                        label_visibility="visible",
+                    )
+                    if _real_id.strip():
+                        _assignments[_sp.patient_id] = _real_id.strip()
+                if st.form_submit_button("✅ Confirm Assignments", type="primary"):
+                    _conflicts = [
+                        rid for rid in _assignments.values()
+                        if any(p.patient_id == rid for p in st.session_state.patients)
+                    ]
+                    if _conflicts:
+                        st.error(f"Patient ID(s) already exist: {', '.join(_conflicts)}")
+                    else:
+                        for _slot_id, _real_id in _assignments.items():
+                            for _p in st.session_state.patients:
+                                if _p.patient_id == _slot_id:
+                                    _p.patient_id = _real_id
+                                    break
+                            for _b in st.session_state.schedule:
+                                if _b.patient_id == _slot_id:
+                                    _b.patient_id = _real_id
+                        _autosave()
+                        st.success(f"Assigned {len(_assignments)} patient(s).")
+                        st.rerun()
+
     with right:
         if st.session_state.schedule:
-            fig = _gantt(st.session_state.schedule, "Equipment", "Patient")
+            # Color SLOT patients in muted gray; real patients use normal Plotly palette
+            _all_pids = list({b.patient_id for b in st.session_state.schedule})
+            _slot_pids = [pid for pid in _all_pids if pid.startswith("SLOT-")]
+            _real_pids = [pid for pid in _all_pids if not pid.startswith("SLOT-")]
+            _plotly_colors = [
+                "#636EFA", "#EF553B", "#00CC96", "#AB63FA", "#FFA15A",
+                "#19D3F3", "#FF6692", "#B6E880", "#FF97FF", "#FECB52",
+            ]
+            _cmap: Dict[str, str] = {}
+            for _i, _pid in enumerate(sorted(_real_pids)):
+                _cmap[_pid] = _plotly_colors[_i % len(_plotly_colors)]
+            for _pid in _slot_pids:
+                _cmap[_pid] = "#BBBBBB"   # gray for placeholder slots
+
+            fig = _gantt(
+                st.session_state.schedule, "Equipment", "Patient",
+                color_map=_cmap if _slot_pids else None,
+            )
+
+            # Mark introduction times on the Gantt
+            _sched_intros = sorted(
+                b.scheduled_start for b in st.session_state.schedule if b.step_index == 0
+            )
+            for _it in _sched_intros:
+                fig.add_vline(
+                    x=_it, line_dash="dot", line_color="#BE2BBB",
+                    line_width=1, opacity=0.6,
+                )
+
+            # Legend note when slots are present
+            if _slot_pids:
+                fig.add_annotation(
+                    text="Gray bars = placeholder SLOT patients",
+                    xref="paper", yref="paper",
+                    x=0.01, y=1.03, showarrow=False,
+                    font=dict(size=11, color="#888888"),
+                    xanchor="left",
+                )
+
             st.plotly_chart(fig, use_container_width=True)
+
+            # Introduction window summary table
+            _tsa_rows = [
+                {
+                    "Slot / Patient": b.patient_id,
+                    "Type": "Placeholder" if b.patient_id.startswith("SLOT-") else "Real",
+                    "Introduction": b.scheduled_start.strftime("%Y-%m-%d %H:%M"),
+                    "Day": b.scheduled_start.strftime("%A"),
+                }
+                for b in sorted(st.session_state.schedule, key=lambda x: x.scheduled_start)
+                if b.step_index == 0
+            ]
+            if _tsa_rows:
+                with st.expander(f"📋 Introduction times ({len(_tsa_rows)} patients)", expanded=bool(_slot_pids)):
+                    st.dataframe(pd.DataFrame(_tsa_rows), use_container_width=True, hide_index=True)
+
             st.subheader("Batch Details")
             st.dataframe(_schedule_df(), use_container_width=True, hide_index=True)
         else:
-            st.info("Set parameters and click **Generate Schedule**.")
+            st.info("Set parameters and click **Generate Schedule** — or use **Auto-Plan Mode** to generate placeholder slots.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
